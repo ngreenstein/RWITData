@@ -1,5 +1,9 @@
 % include("templates/header.tpl", title="RWITData")
 
-<p>Welcome to RWITData!</p>
+
+<h1>RWITData</h1>
+
+<p>Welcome to RWITData! To begin, select a function and dataset above.</p>
+<p>Consult the <a href="about">About</a> page for more information.</p>
 
 % include("templates/footer.tpl")
