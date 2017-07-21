@@ -6,8 +6,12 @@ bottleApp = Bottle()
 def index():
 	return template("templates/index.tpl")
 	
+@bottleApp.route("/data/<dataset:re:sessions|eno>")
+def data(dataset):
+	return template("templates/data.tpl", dataset=dataset)
+	
 @bottleApp.route("/static/<filename:path>")
 def static(filename):
 	return static_file(filename, root="static/")
 	
-run(bottleApp, host="localhost", port=8080, debug=True, reloader=True)
+run(bottleApp, host="localhost", port=8888, debug=True, reloader=True)
