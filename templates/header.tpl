@@ -6,6 +6,7 @@
 	
 	<link rel="stylesheet" href="/static/bootstrap-3.3.7/css/bootstrap.css">
 	<link rel="stylesheet" href="/static/bootstrap-3.3.7/css/bootstrap-theme.css">
+	<link rel="stylesheet" href="/static/custom.css">
 	
 </head>
 <body>

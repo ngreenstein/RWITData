@@ -1,0 +1,10 @@
+.no-gutter
+{
+	padding: 0;
+}
+
+.multi-select-tip
+{
+	opacity: 0.6;
+	margin-top: 0.5em;
+}
