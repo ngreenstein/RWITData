@@ -1,9 +1,5 @@
 <%
-# The server only allows these two values for dataset; anything else 404s
-datasetNames = {"sessions": "Session", "eno": "Education & Outreach"}
-datasetName = datasetNames[dataset]
 pageTitle = datasetName + " Data"
-
 include("templates/header.tpl", title=pageTitle)
 %>
 
@@ -33,7 +29,7 @@ include("templates/header.tpl", title=pageTitle)
 				<p>{{savedQuery.description}}</p>
 			 	<div class="col-md-4 col-lg-4 no-gutter">
 				 	
-					<form data-toggle="validator" action="/data/sessions/query" method="post">
+					<form data-toggle="validator" action="/data/{{dataset}}/query" method="post">
 						
 						<input type="hidden" name="hash" value="{{savedQuery.hash}}">
 						
@@ -63,7 +59,7 @@ include("templates/header.tpl", title=pageTitle)
 								<option>{{option}}</option>
 							% end
 							</select>
-							<p class="multi-select-tip"><em>Hold <kbd>command</kbd> (Mac) or <kbd>control</kbd> (PC) to select multiple options.</em><p>
+							<p class="form-tip"><em>Hold <kbd>command</kbd> (Mac) or <kbd>control</kbd> (PC) to select multiple options.</em><p>
 							% elif paramType == "bool":
 								<option></option>
 								<option>Yes</option>
@@ -77,7 +73,7 @@ include("templates/header.tpl", title=pageTitle)
 						end
 						%>
 						
-						<button type="submit" class="btn btn-primary">Run Query</button>
+						<input type="submit" class="btn btn-primary" value="Run Query">
 					</form>
 		 		</div>
 			</div>

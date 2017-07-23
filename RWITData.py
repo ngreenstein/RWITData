@@ -10,7 +10,7 @@ def index():
 	
 @bottleApp.route("/data/<dataset:re:sessions|eno>")
 def data(dataset):
-	return template("templates/data.tpl", dataset=dataset, savedQueries=SavedQuery.loadAllForDataset(dataset))
+	return template("templates/data.tpl", dataset=dataset, datasetName=datasetNames.get(dataset), savedQueries=SavedQuery.loadAllForDataset(dataset))
 	
 @bottleApp.post("/data/<dataset:re:sessions|eno>/query")
 def query(dataset):
@@ -22,12 +22,37 @@ def query(dataset):
 		return thisQuery.name
 	else:
 		return None
+				
+@bottleApp.route("/admin/<dataset:re:sessions|eno>")
+def admin(dataset):
+	return template("templates/admin.tpl", dataset=dataset, datasetName=datasetNames.get(dataset))
+	
+@bottleApp.post("/admin/<dataset:re:sessions|eno>/export")
+def export(dataset):
+	format = ""
+	if request.forms.get("sqlite"):
+		format = "sqlite"
+	elif request.forms.get("csv"):
+		format = "csv"
+	return "<p>Export {} data for terms {} as {}</p>".format(dataset, request.forms.get("exportTerms"), format)
+	
+@bottleApp.post("/admin/<dataset:re:sessions|eno>/import")
+def imp(dataset):
+	mode = ""
+	if request.forms.get("replaceExisting"):
+		mode = "replace"
+	elif request.forms.get("addToExisting"):
+		mode = "add"
+	importFile = request.files.get("importFile")
+	return "<p>Import {} data from {} in {} mode</p>".format(dataset, importFile.filename, mode)
 	
 @bottleApp.route("/static/<filename:path>")
 def static(filename):
 	return static_file(filename, root="static/")
-	
 
+# The server only allows these two values for dataset; anything else 404s
+datasetNames = {"sessions": "Session", "eno": "Education & Outreach"}
+	
 # Database Stuff
 
 from os import listdir
