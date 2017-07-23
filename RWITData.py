@@ -46,6 +46,10 @@ def imp(dataset):
 	importFile = request.files.get("importFile")
 	return "<p>Import {} data from {} in {} mode</p>".format(dataset, importFile.filename, mode)
 	
+@bottleApp.route("/about")
+def about():
+	return template("templates/about.tpl")
+	
 @bottleApp.route("/static/<filename:path>")
 def static(filename):
 	return static_file(filename, root="static/")
