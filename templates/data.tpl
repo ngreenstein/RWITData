@@ -1,100 +1,82 @@
 <%
-	# The server only allows these two values for dataset; anything else 404s
-	datasetNames = {"sessions": "Sessions", "eno": "Education & Outreach"}
-	datasetName = datasetNames[dataset]
-	pageTitle = datasetName + " Data"
-	include("templates/header.tpl", title=pageTitle)
+# The server only allows these two values for dataset; anything else 404s
+datasetNames = {"sessions": "Session", "eno": "Education & Outreach"}
+datasetName = datasetNames[dataset]
+pageTitle = datasetName + " Data"
+
+include("templates/header.tpl", title=pageTitle)
 %>
 
 <h1>{{datasetName}} Data</h1>
 
 <h2>Saved Queries</h2>
 
+% if len(savedQueries) > 0:
+
 <div class="panel-group row" id="accordion" role="tablist" aria-multiselectable="true">
 	
+	<%
+	queryIndex = 0
+	for savedQuery in savedQueries:
+	%>
+	
 	<div class="panel panel-default">
-		<div class="panel-heading" role="tab" id="sq0-heading">
+		<div class="panel-heading" role="tab" id="sq{{queryIndex}}-heading">
 			<h4 class="panel-title">
-				<a role="button" data-toggle="collapse" data-parent="#accordion" href="#sq0-collapse" aria-expanded="true" aria-controls="sq0-collapse">
-				Sessions by Tutor
+				<a role="button" data-toggle="collapse" data-parent="#accordion" href="#sq{{queryIndex}}-collapse" aria-expanded="true" aria-controls="sq{{queryIndex}}-collapse">
+				{{savedQuery.name}}
 				</a>
 			</h4>
 		</div>
-		<div id="sq0-collapse" class="panel-collapse collapse" role="tabpanel" aria-labelledby="sq0-heading">
+		<div id="sq{{queryIndex}}-collapse" class="panel-collapse collapse" role="tabpanel" aria-labelledby="sq{{queryIndex}}-heading">
 			<div class="panel-body">
-				<p>Finds all sessions associated with a given tutor, as identified by name and, optionally, class year.</p>
+				<p>{{savedQuery.description}}</p>
 			 	<div class="col-md-4 col-lg-4 no-gutter">
+				 	
 					<form data-toggle="validator" action="/data/sessions/query" method="post">
+						
+						<input type="hidden" name="hash" value="{{savedQuery.hash}}">
+						
+						<%
+						paramIndex = 0
+						for param in savedQuery.parameters:
+						paramType = param.get("type")
+						%>
 						<div class="form-group">
-							<label for="sq0-param0">Tutor Name</label>
-							<input type="text" required="required" class="form-control" id="sq0-param0" name="sq0-param0">
-						</div>
-						<div class="form-group">
-							<label for="sq0-param1">Tutor Year</label>
-							<input type="text" class="form-control" id="sq0-param1">
-						</div>
-						<button type="submit" class="btn btn-primary">Run Query</button>
-					</form>
-		 		</div>
-			</div>
-		</div>
-	</div>
-	
-	<div class="panel panel-default">
-		<div class="panel-heading" role="tab" id="sq1-heading">
-			<h4 class="panel-title">
-				<a role="button" data-toggle="collapse" data-parent="#accordion" href="#sq1-collapse" aria-expanded="true" aria-controls="sq1-collapse">
-				All Missed Sessions
-				</a>
-			</h4>
-		</div>
-		<div id="sq1-collapse" class="panel-collapse collapse" role="tabpanel" aria-labelledby="sq1-heading">
-			<div class="panel-body">
-				<p>Finds missed sessions in the database.</p>
-			 	<div class="col-md-4 col-lg-4 no-gutter">
-					<form data-toggle="validator">
-						<button type="submit" class="btn btn-primary">Run Query</button>
-					</form>
-		 		</div>
-			</div>
-		</div>
-	</div>
-	
-	<div class="panel panel-default">
-		<div class="panel-heading" role="tab" id="sq2-heading">
-			<h4 class="panel-title">
-				<a role="button" data-toggle="collapse" data-parent="#accordion" href="#sq2-collapse" aria-expanded="true" aria-controls="sq2-collapse">
-				Presentations By Time
-				</a>
-			</h4>
-		</div>
-		<div id="sq2-collapse" class="panel-collapse collapse" role="tabpanel" aria-labelledby="sq2-heading">
-			<div class="panel-body">
-				<p>Finds presentations that occured at a particular class hour, optionally filtering by x-hours.</p>
-			 	<div class="col-md-4 col-lg-4 no-gutter">
-					<form data-toggle="validator">
-						<div class="form-group">
-							<label for="sq2-param0">Class Hour</label>
-							<select multiple class="form-control" id="sq2-param0" required="required">
-								<option>9L</option>
-								<option>10</option>
-								<option>11</option>
-								<option>12</option>
-								<option>2</option>
-								<option>10A</option>
-								<option>2A</option>
-								<option>3A</option>
+							<label for="sq{{queryIndex}}-param{{paramIndex}}">{{param.get("name")}}</label>
+							% if paramType == "text":
+							<input
+							% elif paramType == "select":
+							<select multiple
+							% elif paramType == "bool":
+							<select
+							% end
+							% if param.get("required"):
+							required
+							% end
+							id="sq{{queryIndex}}-param{{paramIndex}}" name="param{{paramIndex}}" class="form-control">
+							% if paramType == "text":
+							</input>
+							<% elif paramType == "select":
+							for option in param.get("options", []):
+							%>
+								<option>{{option}}</option>
+							% end
 							</select>
 							<p class="multi-select-tip"><em>Hold <kbd>command</kbd> (Mac) or <kbd>control</kbd> (PC) to select multiple options.</em><p>
-						</div>
-						<div class="form-group">
-							<label for="sq2-param1">X-Hour</label>
-							<select class="form-control" id="sq2-param1">
+							% elif paramType == "bool":
 								<option></option>
 								<option>Yes</option>
 								<option>No</option>
 							</select>
+							% end
 						</div>
+						
+						<%
+						paramIndex += 1
+						end
+						%>
+						
 						<button type="submit" class="btn btn-primary">Run Query</button>
 					</form>
 		 		</div>
@@ -102,7 +84,15 @@
 		</div>
 	</div>
 	
+	<%
+	queryIndex += 1
+	end
+	%>
 </div>
+
+% else:
+<p>No saved queries found.</p>
+% end
 
 
 <h2>Custom Query</h2>
