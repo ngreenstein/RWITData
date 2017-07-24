@@ -1,4 +1,4 @@
-# Webserver Stuff
+# === Webserver Stuff ===
 
 from lib.bottle import Bottle, run, template, static_file, request
 
@@ -22,7 +22,7 @@ def query(dataset):
 		return thisQuery.name
 	else:
 		return None
-				
+
 @bottleApp.route("/admin/<dataset:re:sessions|eno>")
 def admin(dataset):
 	return template("templates/admin.tpl", dataset=dataset, datasetName=datasetNames.get(dataset))
@@ -57,10 +57,32 @@ def static(filename):
 # The server only allows these two values for dataset; anything else 404s
 datasetNames = {"sessions": "Session", "eno": "Education & Outreach"}
 	
-# Database Stuff
+# === Database Stuff ===
 
 from os import listdir
-import json
+import sqlite3, json
+
+class DatabaseManager(object):
+	"""Keeps track of database connections and provides convenience methods for interacting with them"""
+	
+	def __init__(self, dbFile):
+		self.connection = sqlite3.connect(dbFile)
+		
+	def executeScript(self, script):
+		self.connection.executescript(script)
+		self.connection.commit()
+		
+class SessionsDatabaseManager(DatabaseManager):
+	"""Keeps track of sessions database connections and provides convenience methods for interacting with them"""
+	
+	def __init__(self):
+		return super(self.__class__, self).__init__("db/sessions.db")
+	
+class EnoDatabaseManager(DatabaseManager):
+	"""Keeps track of education & outreach database connections and provides convenience methods for interacting with them"""
+	
+	def __init__(self):
+		return super(self.__class__, self).__init__("db/eno.db")
 
 class SavedQuery(object):
 	"""A prepared database query, loaded dynamically from JSON files in /saved-queries/"""
@@ -71,7 +93,7 @@ class SavedQuery(object):
 		self.query = query
 		self.parameters = parameters
 	
-	# Query declared as property so that setter can update hash
+	# query declared as property so that setter can update hash
 	@property
 	def query(self):
 		return self._query
@@ -124,4 +146,30 @@ class SavedQuery(object):
 		parsedQueries = sorted(parsedQueries, key=lambda k: k.name) # Alphabetize the list
 		return parsedQueries
 
-run(bottleApp, host="localhost", port=8888, debug=True, reloader=True)
+
+# Look for the databases and create them if they do not exist
+
+dbFiles = listdir("db/")
+
+sessionsDb = SessionsDatabaseManager()
+enoDb = EnoDatabaseManager()
+
+if not "sessions.db" in dbFiles:
+	try:
+		openFile = open("db/sessions-schema.sql", "r")
+		script = openFile.read()
+		openFile.close()
+		sessionsDb.executeScript(script)
+	except Exception as error:
+		print "An error occurred creating the sessions database: {}".format(error)
+		
+if not "eno.db" in dbFiles:
+	try:
+		openFile = open("db/eno-schema.sql", "r")
+		script = openFile.read()
+		openFile.close()
+		enoDb.executeScript(script)
+	except Exception as error:
+		print "An error occurred creating the education & outreach database: {}".format(error)
+
+# run(bottleApp, host="localhost", port=8888, debug=True, reloader=True)

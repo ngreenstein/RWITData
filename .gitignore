@@ -1,7 +1,8 @@
 # == Custom ==
 
 *.pyc
-
+db/eno.db
+db/sessions.db
 
 
 
