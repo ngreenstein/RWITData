@@ -1,7 +1,7 @@
 CREATE TABLE "centerSessions" (
 	"id" INTEGER PRIMARY KEY NOT NULL UNIQUE,
-	"clientId" INTEGER REFERENCES "people.id",
-	"tutorId" INTEGER REFERENCES "people.id",
+	"clientId" INTEGER REFERENCES "people.id"(""),
+	"tutorId" INTEGER REFERENCES "people.id"(""),
 	"type" TEXT,
 	"term" TEXT,
 	"startTime" INTEGER,
@@ -9,16 +9,16 @@ CREATE TABLE "centerSessions" (
 	"creationTime" INTEGER,
 	"updateTime" INTEGER,
 	"state" TEXT,
-	"tutorRecordId" INTEGER REFERENCES "tutorRecords.id",
-	"clientRecordId" INTEGER REFERENCES "clientRecords.id"
+	"tutorRecordId" INTEGER REFERENCES "tutorRecords.id"(""),
+	"clientRecordId" INTEGER REFERENCES "clientRecords.id"("")
 );
 
 CREATE TABLE "writingAssistantSessions" (
 	"id" INTEGER PRIMARY KEY UNIQUE NOT NULL,
 	"type" TEXT,
 	"term" TEXT,
-	"clientId" INTEGER REFERENCES "people.id",
-	"tutorId" INTEGER REFERENCES "people.id",
+	"clientId" INTEGER REFERENCES "people.id"(""),
+	"tutorId" INTEGER REFERENCES "people.id"(""),
 	"date" INTEGER,
 	"creationTime" INTEGER,
 	"updateTime" INTEGER,
@@ -48,8 +48,8 @@ CREATE TABLE "people" (
 
 CREATE TABLE "tutorRecords" (
 	"id" INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE NOT NULL,
-	"tutorId" INTEGER REFERENCES "people.id",
-	"centerSessionId" INTEGER REFERENCES "centerSessions.id",
+	"tutorId" INTEGER REFERENCES "people.id"(""),
+	"centerSessionId" INTEGER REFERENCES "centerSessions.id"(""),
 	"primaryDocumentType" TEXT,
 	"otherPrimaryDocumentType" TEXT,
 	"dueDate" INTEGER,
@@ -69,7 +69,7 @@ CREATE TABLE "tutorRecords" (
 
 CREATE TABLE "clientRecords" (
 	"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL UNIQUE,
-	"centerSessionId" INTEGER REFERENCES "centerSession.id",
+	"centerSessionId" INTEGER REFERENCES "centerSession.id"(""),
 	"globalGoalsMet" TEXT,
 	"localGoalsMet" TEXT,
 	"feedback" TEXT,

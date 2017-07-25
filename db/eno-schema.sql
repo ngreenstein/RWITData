@@ -13,7 +13,7 @@ CREATE TABLE "presentations" (
 
 CREATE TABLE "profRecords" (
 	"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL UNIQUE,
-	"presentationId" INTEGER REFERENCES "presentations.id",
+	"presentationId" INTEGER REFERENCES "presentations.id"(""),
 	"overallRating" REAL,
 	"complementCourse" TEXT,
 	"presentationInfo" TEXT,
@@ -26,7 +26,7 @@ CREATE TABLE "profRecords" (
 
 CREATE TABLE "studentRecords" (
 	"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL UNIQUE,
-	"presentationId" INTEGER REFERENCES "presentations.id",
+	"presentationId" INTEGER REFERENCES "presentations.id"(""),
 	"classYear" INTEGER,
 	"overallRating" REAL,
 	"presentationInfo" TEXT,

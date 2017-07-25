@@ -72,17 +72,56 @@ class DatabaseManager(object):
 		self.connection.executescript(script)
 		self.connection.commit()
 		
+	def importFromCsv(self, csvPath):
+		pass
+		
+	def importFromSqlite(self, sqlitePath, replace=False):
+		pass
+	
+	# Dumps the schema of a database connection into a string (just for use in comparing schemas; not actually meant to be stored)
+	@staticmethod
+	def serializeSchema(connection):
+		tables = connection.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;")
+		serialized = ""
+		for (tableName,) in tables:
+			serialized += str(tableName) + "\n"
+			columns = connection.execute("pragma table_info('{}')".format(tableName)).fetchall()
+			for column in columns:
+				serialized += str(column) + "\n"
+		return serialized
+	
+	# Comapres the schema of an instance's database with the schema specified in the sourceSchema file
+	def validateSchema(self, sourceSchema):
+		tempConnection = sqlite3.connect(":memory:")
+		openFile = open(sourceSchema, "r")
+		createScript = openFile.read()
+		openFile.close()
+		tempConnection.executescript(createScript)
+		validSerialized = self.__class__.serializeSchema(tempConnection)
+		testSerialized = self.__class__.serializeSchema(self.connection)
+		tempConnection.close()
+		return testSerialized == validSerialized
+		
+	def validateOwnSchema(self):
+		pass
+		
 class SessionsDatabaseManager(DatabaseManager):
 	"""Keeps track of sessions database connections and provides convenience methods for interacting with them"""
 	
 	def __init__(self):
 		return super(self.__class__, self).__init__("db/sessions.db")
+		
+	def validateOwnSchema(self):
+		return super(self.__class__, self).validateSchema("db/sessions-schema.sql")
 	
 class EnoDatabaseManager(DatabaseManager):
 	"""Keeps track of education & outreach database connections and provides convenience methods for interacting with them"""
 	
 	def __init__(self):
 		return super(self.__class__, self).__init__("db/eno.db")
+		
+	def validateOwnSchema(self):
+		return super(self.__class__, self).validateSchema("db/eno-schema.sql")
 
 class SavedQuery(object):
 	"""A prepared database query, loaded dynamically from JSON files in /saved-queries/"""
@@ -172,4 +211,19 @@ if not "eno.db" in dbFiles:
 	except Exception as error:
 		print "An error occurred creating the education & outreach database: {}".format(error)
 
+try:
+	if not sessionsDb.validateOwnSchema():
+		print "Error: sessions database schema is invalid"
+except Exception as error:
+	print "An error occurred validating the sessions database schema: {}".format(error)
+
+try:
+	if not enoDb.validateOwnSchema():
+		print "Error: education & outreach database schema is invalid"
+except Exception as error:
+	print "An error occurred validating the education and outreach database schema: {}".format(error)
+
 # run(bottleApp, host="localhost", port=8888, debug=True, reloader=True)
+
+sessionsDb.connection.close()
+enoDb.connection.close()
