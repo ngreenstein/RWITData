@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 # === Webserver Stuff ===
 
 from lib.bottle import Bottle, run, template, static_file, request
@@ -223,7 +226,7 @@ try:
 except Exception as error:
 	print "An error occurred validating the education and outreach database schema: {}".format(error)
 
-# run(bottleApp, host="localhost", port=8888, debug=True, reloader=True)
+run(bottleApp, host="localhost", port=8888, debug=True, reloader=True)
 
 sessionsDb.connection.close()
 enoDb.connection.close()
