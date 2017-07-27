@@ -15,7 +15,7 @@ include("templates/header.tpl", title=pageTitle)
 	<form class="col-md-4 col-lg-4 no-gutter" data-toggle="validator" action="/admin/{{dataset}}/export" method="post">
 		<div class="form-group">
 			<label for="exportTerms">Terms:</label>
-			<input type="text" class="form-control" id="exportTerms" name="exportTerms" placeholder="e.g. '17S, 17X'" pattern="(?i)(\d{2}(F|W|S|X)(,\s+)?)+">
+			<input type="text" class="form-control" id="exportTerms" name="exportTerms" placeholder="e.g. '17S, 17X'" pattern="(\d{2}(F|W|S|X)(,\s+)?)+">
 			<p class="form-tip"><em>Leave blank for all terms. Separate multiple terms with commas.</em><p>
 		</div>
 		<input type="submit" class="btn btn-primary" name="sqlite" value="Export SQLite">
