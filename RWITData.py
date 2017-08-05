@@ -65,6 +65,7 @@ def imp(dataset):
 		
 		global sessionsDb, enoDb
 		
+		# [TODO ngreenstein] See if there's a way to organize this a little more neatly
 		if dataset == "sessions":
 			if mode == "add":
 				if ext == ".csv":
@@ -119,6 +120,7 @@ class DatabaseManager(object):
 	
 	def __init__(self, dbFile):
 		self.connection = sqlite3.connect(dbFile)
+		self.connection.text_factory = str
 		
 	def executeScript(self, script):
 		self.connection.executescript(script)
@@ -131,11 +133,15 @@ class DatabaseManager(object):
 	@classmethod
 	def replaceFromSqlite(cls, sqlitePath):
 		incomingDb = cls(dbPath = sqlitePath)
+		# Validate incoming schema against stored master (equivalent to validating against current database
+		# schema because that is validated against stored master at startup).
 		if not incomingDb.validateOwnSchema():
 			print "BAD: Incoming database schema invalid."
+			incomingDb.connection.close()
 			os.remove(sqlitePath)
 			return False
 		else:
+			# If the incoming database is valid, delete the old one and move the new one into its proper place
 			os.remove(cls.masterPath)
 			shutil.move(sqlitePath, cls.masterPath)
 			return cls()
@@ -144,7 +150,25 @@ class DatabaseManager(object):
 		pass
 		
 	def addFromSqlite(self, sqlitePath):
-		pass
+		# Validate incoming schema against stored master (equivalent to validating against current database
+		# schema because that is validated against stored master at startup).
+		incomingDb = self.__class__(dbPath = sqlitePath)
+		if not incomingDb.validateOwnSchema():
+			print "BAD: Incoming database schema invalid."
+			incomingDb.connection.close()
+			os.remove(sqlitePath)
+			return False
+		else:
+			# If the incoming database is valid, walk through all its tables and add each row to the correspondnig table
+			# of the current database. Any duplicates between incoming and current db (or otherwise malformed rows)
+			# are ignored. Should be just duplicates in most cases, though, because schema has been validated to enforce
+			# other proper behavior.
+			incomingDb.connection.close()
+			self.connection.execute("ATTACH '{}' AS incomingDb;".format(sqlitePath))
+			for (thisTable,) in self.connection.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"):
+				self.connection.execute("INSERT OR IGNORE INTO {} SELECT * FROM incomingDb.{};".format(thisTable, thisTable))
+			self.connection.execute("DETACH incomingDb;")
+			self.connection.commit()
 	
 	# Dumps the schema of a database connection into a string (just for use in comparing schemas; not actually meant to be stored)
 	@staticmethod
@@ -161,6 +185,7 @@ class DatabaseManager(object):
 	# Comapres the schema of an instance's database with the schema specified in the sourceSchema file
 	def validateSchema(self, sourceSchema):
 		tempConnection = sqlite3.connect(":memory:")
+		tempConnection.text_factory = str
 		openFile = open(sourceSchema, "r")
 		createScript = openFile.read()
 		openFile.close()
