@@ -1,9 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+# === Globals ===
+
+sessionsDb = None
+enoDb = None
+
 # === Webserver Stuff ===
 
 from lib.bottle import Bottle, run, template, static_file, request
+import os.path, tempfile
 
 bottleApp = Bottle()
 
@@ -31,7 +37,7 @@ def admin(dataset):
 	return template("templates/admin.tpl", dataset=dataset, datasetName=datasetNames.get(dataset))
 	
 @bottleApp.post("/admin/<dataset:re:sessions|eno>/export")
-def export(dataset):
+def exp(dataset):
 	format = ""
 	if request.forms.get("sqlite"):
 		format = "sqlite"
@@ -41,12 +47,53 @@ def export(dataset):
 	
 @bottleApp.post("/admin/<dataset:re:sessions|eno>/import")
 def imp(dataset):
-	mode = ""
-	if request.forms.get("replaceExisting"):
-		mode = "replace"
-	elif request.forms.get("addToExisting"):
-		mode = "add"
-	importFile = request.files.get("importFile")
+	try:
+		mode = ""
+		if request.forms.get("replaceExisting"):
+			mode = "replace"
+		elif request.forms.get("addToExisting"):
+			mode = "add"
+		importFile = request.files.get("importFile")
+		name, ext = os.path.splitext(importFile.filename)
+		if ext not in (".csv", ".db", ".sqlite", ".sqlite3", ".db3"):
+			return "BAD: invalid filetype"
+		if os.fstat(importFile.file.fileno()).st_size > 100000000:
+			return "BAD: file too large (more than 100MB)"
+			
+		tempFilePath = tempfile.gettempdir() + "temp-incoming-import" + ext
+		importFile.save(tempFilePath, overwrite=True)
+		
+		global sessionsDb, enoDb
+		
+		if dataset == "sessions":
+			if mode == "add":
+				if ext == ".csv":
+					sessionsDb.addFromCsv(tempFilePath)
+				else: # All other extensions are sqlite
+					sessionsDb.addFromSqlite(tempFilePath)
+			elif mode == "replace":
+				if ext == ".csv":
+					SessionsDatabaseManager.replaceFromCsv(tempFilePath)
+				else: # All other extensions are sqlite
+					newDb = SessionsDatabaseManager.replaceFromSqlite(tempFilePath)
+					if newDb:
+						sessionsDb.connection.close()
+						sessionsDb = newDb
+		elif dataset == "eno":
+			if mode == "add":
+				if ext == ".csv":
+					enoDb.addFromCsv(tempFilePath)
+				else: # All other extensions are sqlite
+					enoDb.addFromSqlite(tempFilePath)
+			elif mode == "replace":
+				if ext == ".csv":
+					EnoDatabaseManager.replaceFromCsv(tempFilePath)
+				else: # All other extensions are sqlite
+					EnoDatabaseManager.replaceFromSqlite(tempFilePath)
+	
+	except Exception as error:
+		print "An error occurred during import {}".format(error)
+	
 	return "<p>Import {} data from {} in {} mode</p>".format(dataset, importFile.filename, mode)
 	
 @bottleApp.route("/about")
@@ -62,11 +109,13 @@ datasetNames = {"sessions": "Session", "eno": "Education & Outreach"}
 	
 # === Database Stuff ===
 
-from os import listdir
-import sqlite3, json
+from os import listdir, remove
+import sqlite3, json, shutil
 
 class DatabaseManager(object):
 	"""Keeps track of database connections and provides convenience methods for interacting with them"""
+	
+	masterPath = None
 	
 	def __init__(self, dbFile):
 		self.connection = sqlite3.connect(dbFile)
@@ -75,10 +124,26 @@ class DatabaseManager(object):
 		self.connection.executescript(script)
 		self.connection.commit()
 		
-	def importFromCsv(self, csvPath):
+	@classmethod
+	def replaceFromCsv(cls, csvPath):
+		pass
+	
+	@classmethod
+	def replaceFromSqlite(cls, sqlitePath):
+		incomingDb = cls(dbPath = sqlitePath)
+		if not incomingDb.validateOwnSchema():
+			print "BAD: Incoming database schema invalid."
+			os.remove(sqlitePath)
+			return False
+		else:
+			os.remove(cls.masterPath)
+			shutil.move(sqlitePath, cls.masterPath)
+			return cls()
+		
+	def addFromCsv(self, csvPath):
 		pass
 		
-	def importFromSqlite(self, sqlitePath, replace=False):
+	def addFromSqlite(self, sqlitePath):
 		pass
 	
 	# Dumps the schema of a database connection into a string (just for use in comparing schemas; not actually meant to be stored)
@@ -111,8 +176,10 @@ class DatabaseManager(object):
 class SessionsDatabaseManager(DatabaseManager):
 	"""Keeps track of sessions database connections and provides convenience methods for interacting with them"""
 	
-	def __init__(self):
-		return super(self.__class__, self).__init__("db/sessions.db")
+	masterPath = "db/sessions.db"
+	
+	def __init__(self, dbPath = masterPath):
+		return super(self.__class__, self).__init__(dbPath)
 		
 	def validateOwnSchema(self):
 		return super(self.__class__, self).validateSchema("db/sessions-schema.sql")
@@ -120,8 +187,10 @@ class SessionsDatabaseManager(DatabaseManager):
 class EnoDatabaseManager(DatabaseManager):
 	"""Keeps track of education & outreach database connections and provides convenience methods for interacting with them"""
 	
-	def __init__(self):
-		return super(self.__class__, self).__init__("db/eno.db")
+	masterPath = "db/eno.db"
+	
+	def __init__(self, dbPath = masterPath):
+		return super(self.__class__, self).__init__(dbPath)
 		
 	def validateOwnSchema(self):
 		return super(self.__class__, self).validateSchema("db/eno-schema.sql")
