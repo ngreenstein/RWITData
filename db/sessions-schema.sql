@@ -1,13 +1,13 @@
 CREATE TABLE "centerSessions" (
 	"id" INTEGER PRIMARY KEY NOT NULL UNIQUE,
 	"clientId" INTEGER REFERENCES "people.id"(""),
-	"tutorId" INTEGER REFERENCES "people.id"(""),
+	"tutorId" INTEGER REFERENCES "tutorStubs.id"(""),
 	"type" TEXT,
 	"term" TEXT,
-	"startTime" INTEGER,
-	"stopTime" INTEGER,
-	"creationTime" INTEGER,
-	"updateTime" INTEGER,
+	"startTime" TEXT,
+	"stopTime" TEXT,
+	"creationTime" TEXT,
+	"updateTime" TEXT,
 	"state" TEXT,
 	"tutorRecordId" INTEGER REFERENCES "tutorRecords.id"(""),
 	"clientRecordId" INTEGER REFERENCES "clientRecords.id"("")
@@ -15,13 +15,13 @@ CREATE TABLE "centerSessions" (
 
 CREATE TABLE "writingAssistantSessions" (
 	"id" INTEGER PRIMARY KEY UNIQUE NOT NULL,
+	/* WA sessions have real tutor data, so use `people` instead of `tutorStubs` */
+	"tutorId" INTEGER REFERENCES "people.id"(""),
 	"type" TEXT,
 	"term" TEXT,
-	"clientId" INTEGER REFERENCES "people.id"(""),
-	"tutorId" INTEGER REFERENCES "people.id"(""),
-	"date" INTEGER,
-	"creationTime" INTEGER,
-	"updateTime" INTEGER,
+	"date" TEXT,
+	"creationTime" TEXT,
+	"updateTime" TEXT,
 	"hours" REAL,
 	"attendees" TEXT,
 	"assignment" TEXT,
@@ -43,16 +43,27 @@ CREATE TABLE "people" (
 	"firstLanguage" TEXT,
 	"fluentSpeaking" TEXT,
 	"fluentReading" TEXT,
-	"fluentWriting" TEXT
+	"fluentWriting" TEXT,
+	UNIQUE ("name", "deptClass")
+);
+
+/*
+* Currently (17X), RWIT Online doesn't give any tutor info beyond name. Better info
+* (and a better way to unique people in general) is theoretically coming soon, at which point
+* tutors should be put into the `people` table with clients, and any `tutorId` column can
+* reference `people(id)` instead of `tutorStubs(id)`.
+*/
+CREATE TABLE "tutorStubs" (
+	"id" INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE NOT NULL,
+	"name" TEXT UNIQUE NOT NULL
 );
 
 CREATE TABLE "tutorRecords" (
 	"id" INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE NOT NULL,
-	"tutorId" INTEGER REFERENCES "people.id"(""),
-	"centerSessionId" INTEGER REFERENCES "centerSessions.id"(""),
+	"tutorId" INTEGER REFERENCES "tutorStubs.id"(""),
 	"primaryDocumentType" TEXT,
 	"otherPrimaryDocumentType" TEXT,
-	"dueDate" INTEGER,
+	"dueDate" TEXT,
 	"documentTypes" TEXT,
 	"documentCategories" TEXT,
 	"documentLanguages" TEXT,
@@ -69,7 +80,7 @@ CREATE TABLE "tutorRecords" (
 
 CREATE TABLE "clientRecords" (
 	"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL UNIQUE,
-	"centerSessionId" INTEGER REFERENCES "centerSession.id"(""),
+	"clientId" INTEGER REFERENCES "people.id"(""),
 	"globalGoalsMet" TEXT,
 	"localGoalsMet" TEXT,
 	"feedback" TEXT,
