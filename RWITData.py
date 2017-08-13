@@ -10,6 +10,7 @@ enoDb = None
 
 from lib.bottle import Bottle, run, template, static_file, request
 import os.path, tempfile
+from shutil import copyfile
 
 bottleApp = Bottle()
 
@@ -23,6 +24,7 @@ def data(dataset):
 	
 @bottleApp.post("/data/<dataset:re:sessions|eno>/query")
 def query(dataset):
+	return "Saved query execution not yet implemented."
 	hashVal = int(request.forms.get("hash"))
 	savedQueries = SavedQuery.loadAllForDataset(dataset)
 	matchedQueries = [query for query in savedQueries if query.hash == hashVal]
@@ -38,12 +40,29 @@ def admin(dataset):
 	
 @bottleApp.post("/admin/<dataset:re:sessions|eno>/export")
 def exp(dataset):
-	format = ""
-	if request.forms.get("sqlite"):
-		format = "sqlite"
-	elif request.forms.get("csv"):
-		format = "csv"
-	return "<p>Export {} data for terms {} as {}</p>".format(dataset, request.forms.get("exportTerms"), format)
+	terms = request.forms.get("exportTerms")
+	if len(terms) > 0:
+		terms = terms.split(", ")
+	if dataset == "sessions":
+		if request.forms.get("sqlite"):
+			try:
+				os.remove("download/temp-export.db")
+			except OSError:
+				pass # If the file does not exist, don't worry about it
+			if len(terms) > 0:
+			# 	filteredDb = SessionsDatabaseManager("db/temp-export.db")
+			# 	filteredDb.connection.execute("ATTACH 'db/sessions.db' AS masterDb;")
+			# 	filteredDb.connection.execute("INSERT OR IGNORE INTO 'centerSessions' SELECT * FROM masterDb.centerSessions WHERE ;".format(thisTable, thisTable))
+			# 	filteredDb.connection.execute("DETACH masterDb;")
+			# 	filteredDb.connection.commit()
+				return "Export filtered by term not yet implemented. Please export the entire database."
+			else:
+				copyfile("db/sessions.db", "download/temp-export.db")
+				return static_file("temp-export.db", root = "download/", download = "RWITData.db")
+		elif request.forms.get("csv"):
+			return "CSV file export not yet implemented. Please use the SQLite export function."
+	else:
+		return "E&O export not yet implemented."
 	
 @bottleApp.post("/admin/<dataset:re:sessions|eno>/import")
 def imp(dataset):
@@ -83,6 +102,7 @@ def imp(dataset):
 					sessionsDb.connection.close()
 					sessionsDb = newDb
 		elif dataset == "eno":
+			return "E&O import is not yet implemented."
 			if mode == "add":
 				if ext == ".csv":
 					enoDb.addFromCsv(tempFilePath)
