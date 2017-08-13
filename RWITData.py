@@ -3,6 +3,9 @@
 
 # === Globals ===
 
+DEBUG = False
+DEBUG = True
+
 sessionsDb = None
 enoDb = None
 
@@ -559,7 +562,7 @@ try:
 except Exception as error:
 	print "An error occurred validating the education and outreach database schema: {}".format(error)
 
-run(bottleApp, host="localhost", port=8888, debug=True, reloader=True)
+run(bottleApp, host="localhost", port=8888, debug=DEBUG, reloader=DEBUG)
 
 sessionsDb.connection.close()
 enoDb.connection.close()
