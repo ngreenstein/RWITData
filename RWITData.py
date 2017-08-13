@@ -11,7 +11,7 @@ enoDb = None
 
 # === Webserver Stuff ===
 
-from lib.bottle import Bottle, run, template, static_file, request
+from app.lib.bottle import Bottle, run, template, static_file, request
 import os.path, tempfile
 from shutil import copyfile
 
@@ -19,11 +19,11 @@ bottleApp = Bottle()
 
 @bottleApp.route("/")
 def index():
-	return template("templates/index.tpl")
+	return template("app/templates/index.tpl")
 	
 @bottleApp.route("/data/<dataset:re:sessions|eno>")
 def data(dataset):
-	return template("templates/data.tpl", dataset=dataset, datasetName=datasetNames.get(dataset), savedQueries=SavedQuery.loadAllForDataset(dataset))
+	return template("app/templates/data.tpl", dataset=dataset, datasetName=datasetNames.get(dataset), savedQueries=SavedQuery.loadAllForDataset(dataset))
 	
 @bottleApp.post("/data/<dataset:re:sessions|eno>/query")
 def query(dataset):
@@ -39,7 +39,7 @@ def query(dataset):
 
 @bottleApp.route("/admin/<dataset:re:sessions|eno>")
 def admin(dataset):
-	return template("templates/admin.tpl", dataset=dataset, datasetName=datasetNames.get(dataset))
+	return template("app/templates/admin.tpl", dataset=dataset, datasetName=datasetNames.get(dataset))
 	
 @bottleApp.post("/admin/<dataset:re:sessions|eno>/export")
 def exp(dataset):
@@ -49,7 +49,7 @@ def exp(dataset):
 	if dataset == "sessions":
 		if request.forms.get("sqlite"):
 			try:
-				os.remove("download/temp-export.db")
+				os.remove("app/download/temp-export.db")
 			except OSError:
 				pass # If the file does not exist, don't worry about it
 			if len(terms) > 0:
@@ -60,8 +60,8 @@ def exp(dataset):
 			# 	filteredDb.connection.commit()
 				return "Export filtered by term not yet implemented. Please export the entire database."
 			else:
-				copyfile("db/sessions.db", "download/temp-export.db")
-				return static_file("temp-export.db", root = "download/", download = "RWITData.db")
+				copyfile("app/db/sessions.db", "app/download/temp-export.db")
+				return static_file("temp-export.db", root = "app/download/", download = "RWITData.db")
 		elif request.forms.get("csv"):
 			return "CSV file export not yet implemented. Please use the SQLite export function."
 	else:
@@ -124,11 +124,11 @@ def imp(dataset):
 	
 @bottleApp.route("/about")
 def about():
-	return template("templates/about.tpl")
+	return template("app/templates/about.tpl")
 	
 @bottleApp.route("/static/<filename:path>")
 def static(filename):
-	return static_file(filename, root="static/")
+	return static_file(filename, root="app/static/")
 
 # The server only allows these two values for dataset; anything else 404s
 datasetNames = {"sessions": "Session", "eno": "Education & Outreach"}
@@ -163,7 +163,7 @@ class DatabaseManager(object):
 			pass # If the file does not exist, don't worry about it
 		tempDb = cls(dbPath = tempPath)
 		tempDb.connection.text_factory = str
-		schemaFile = open("db/sessions-schema.sql", "r")
+		schemaFile = open("app/db/sessions-schema.sql", "r")
 		createScript = schemaFile.read()
 		schemaFile.close()
 		tempDb.connection.executescript(createScript)
@@ -245,13 +245,13 @@ class DatabaseManager(object):
 class SessionsDatabaseManager(DatabaseManager):
 	"""Keeps track of sessions database connections and provides convenience methods for interacting with them"""
 	
-	masterPath = "db/sessions.db"
+	masterPath = "app/db/sessions.db"
 	
 	def __init__(self, dbPath = masterPath):
 		return super(self.__class__, self).__init__(dbPath)
 		
 	def validateOwnSchema(self):
-		return super(self.__class__, self).validateSchema("db/sessions-schema.sql")
+		return super(self.__class__, self).validateSchema("app/db/sessions-schema.sql")
 	
 	# RWIT Online's CSV export only identifies tutors by name. More info on them is
 	# available if they've been clients or WAs, but not all tutors have been.
@@ -454,13 +454,13 @@ class SessionsDatabaseManager(DatabaseManager):
 class EnoDatabaseManager(DatabaseManager):
 	"""Keeps track of education & outreach database connections and provides convenience methods for interacting with them"""
 	
-	masterPath = "db/eno.db"
+	masterPath = "app/db/eno.db"
 	
 	def __init__(self, dbPath = masterPath):
 		return super(self.__class__, self).__init__(dbPath)
 		
 	def validateOwnSchema(self):
-		return super(self.__class__, self).validateSchema("db/eno-schema.sql")
+		return super(self.__class__, self).validateSchema("app/db/eno-schema.sql")
 
 class SavedQuery(object):
 	"""A prepared database query, loaded dynamically from JSON files in /saved-queries/"""
@@ -505,7 +505,7 @@ class SavedQuery(object):
 		
 	@staticmethod
 	def loadAllForDataset(dataset):
-		basePath = "saved-queries/" + dataset + "/"
+		basePath = "app/saved-queries/" + dataset + "/"
 		filesList = listdir(basePath)
 		parsedQueries = []
 		for thisFile in filesList:
@@ -527,14 +527,14 @@ class SavedQuery(object):
 
 # Look for the databases and create them if they do not exist
 
-dbFiles = listdir("db/")
+dbFiles = listdir("app/db/")
 
 sessionsDb = SessionsDatabaseManager()
 enoDb = EnoDatabaseManager()
 
 if not "sessions.db" in dbFiles:
 	try:
-		openFile = open("db/sessions-schema.sql", "r")
+		openFile = open("app/db/sessions-schema.sql", "r")
 		script = openFile.read()
 		openFile.close()
 		sessionsDb.executeScript(script)
@@ -543,7 +543,7 @@ if not "sessions.db" in dbFiles:
 		
 if not "eno.db" in dbFiles:
 	try:
-		openFile = open("db/eno-schema.sql", "r")
+		openFile = open("app/db/eno-schema.sql", "r")
 		script = openFile.read()
 		openFile.close()
 		enoDb.executeScript(script)

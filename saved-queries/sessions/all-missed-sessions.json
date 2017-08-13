@@ -1,5 +1,0 @@
-{
-	"name": "All Missed Sessions",
-	"description": "Finds all missed sessions in the database.",
-	"query": "SELECT * FROM sessions WHERE state = 'missed';"
-}

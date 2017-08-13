@@ -1,0 +1,15 @@
+{
+	"name": "Sessions by Tutor",
+	"description": "Finds all sessions associated with a given tutor, as identified by name and, optionally, class year.",
+	"query": "SELECT * FROM sessions WHERE tutorName = ? and tutorYear = ?;",
+	"parameters": [{
+						"name": "Tutor Name",
+						"type": "text",
+						"required": true
+					},
+					{
+						"name": "Tutor Year",
+						"type": "text",
+						"required": false
+					}]
+}
