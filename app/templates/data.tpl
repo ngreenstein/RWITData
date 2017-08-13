@@ -1,6 +1,6 @@
 <%
 pageTitle = datasetName + " Data"
-include("app/templates/header.tpl", title=pageTitle)
+include(basePath + "app/templates/header.tpl", title=pageTitle)
 %>
 
 <h1>{{datasetName}} Data</h1>
@@ -94,4 +94,4 @@ include("app/templates/header.tpl", title=pageTitle)
 <h2>Custom Query</h2>
 <p>coming soon</p>
 
-% include("app/templates/footer.tpl")
+% include(basePath + "app/templates/footer.tpl")

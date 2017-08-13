@@ -1,6 +1,6 @@
 <%
 pageTitle = datasetName + " Admin"
-include("app/templates/header.tpl", title=pageTitle)
+include(basePath + "app/templates/header.tpl", title=pageTitle)
 %>
 
 <h1>{{datasetName}} Admin</h1>
@@ -51,4 +51,4 @@ include("app/templates/header.tpl", title=pageTitle)
 	</div>
 </div>
 
-% include("app/templates/footer.tpl", scripts=["/static/admin.js"])
+% include(basePath + "app/templates/footer.tpl", scripts=["/static/admin.js"])
