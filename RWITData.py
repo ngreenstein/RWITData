@@ -64,16 +64,54 @@ def exp(dataset):
 				os.remove(makePath("app/download/temp-export.db"))
 			except OSError:
 				pass # If the file does not exist, don't worry about it
-			if len(terms) > 0:
-			# 	filteredDb = SessionsDatabaseManager("db/temp-export.db")
-			# 	filteredDb.connection.execute("ATTACH 'db/sessions.db' AS masterDb;")
-			# 	filteredDb.connection.execute("INSERT OR IGNORE INTO 'centerSessions' SELECT * FROM masterDb.centerSessions WHERE ;".format(thisTable, thisTable))
-			# 	filteredDb.connection.execute("DETACH masterDb;")
-			# 	filteredDb.connection.commit()
-				return "Export filtered by term not yet implemented. Please export the entire database."
-			else:
+			try:
 				copyfile(makePath("app/db/sessions.db"), makePath("app/download/temp-export.db"))
+				# If filtering by terms, prune out irrelevant entries
+				if len(terms) > 0:
+					tempDb = SessionsDatabaseManager(makePath("app/download/temp-export.db"))
+					termPlaceholders = ",".join("?" * len(terms))
+					# Remove center sessions and associated entries
+					centerQuery = "SELECT id, tutorRecordId, clientRecordId FROM centerSessions WHERE term NOT IN ({})".format(termPlaceholders);
+					badCenterRows = tempDb.connection.execute(centerQuery, terms).fetchall()
+					badCenterSessions, badTutorRecords, badClientRecords = [], [], []
+					for sessionId, tutorRecordId, clientRecordId in badCenterRows:
+						if sessionId:
+							badCenterSessions.append(sessionId)
+						if tutorRecordId:
+							badTutorRecords.append(tutorRecordId)
+						if clientRecordId:
+							badClientRecords.append(clientRecordId)
+					tempDb.connection.executemany("DELETE FROM centerSessions WHERE id = ?;", [(thisId,) for thisId in badCenterSessions])
+					tempDb.connection.executemany("DELETE FROM tutorRecords WHERE id = ?;", [(thisId,) for thisId in badTutorRecords])
+					tempDb.connection.executemany("DELETE FROM clientRecords WHERE id = ?;", [(thisId,) for thisId in badClientRecords])
+					# Remove WA sessions
+					waQuery = "SELECT id FROM writingAssistantSessions WHERE term NOT IN ({})".format(termPlaceholders);
+					badWaSessions = [thisId[0] for thisId in tempDb.connection.execute(waQuery, terms).fetchall()]
+					tempDb.connection.executemany("DELETE FROM writingAssistantSessions WHERE id = ?;", [(thisId,) for thisId in badWaSessions])
+					# Remove extraneous people and tutorStubs
+					# [TODO ngreenstein] See if there's a more compact way to do this
+					allPeople = [thisId[0] for thisId in tempDb.connection.execute("SELECT id FROM people;").fetchall()]
+					peopleToRemove = []
+					for personId in allPeople:
+						refCount = 0
+						refCount += len(tempDb.connection.execute("SELECT id FROM centerSessions WHERE clientId = ?;", (personId,)).fetchall())
+						refCount += len(tempDb.connection.execute("SELECT id FROM writingAssistantSessions WHERE tutorId = ?;", (personId,)).fetchall())
+						if refCount <= 0:
+							peopleToRemove.append(personId)
+					tempDb.connection.executemany("DELETE FROM people WHERE id = ?;", [(thisId,) for thisId in peopleToRemove])
+					allTutorStubs = [thisId[0] for thisId in tempDb.connection.execute("SELECT id FROM tutorStubs;").fetchall()]
+					tutorStubsToRemove = []
+					for tutorStubId in allTutorStubs:
+						refCount = 0
+						refCount += len(tempDb.connection.execute("SELECT id FROM centerSessions WHERE tutorId = ?;", (tutorStubId,)).fetchall())
+						if refCount <= 0:
+							tutorStubsToRemove.append(tutorStubId)
+					tempDb.connection.executemany("DELETE FROM tutorStubs WHERE id = ?;", [(thisId,) for thisId in tutorStubsToRemove])
+					tempDb.connection.commit()
 				return static_file("temp-export.db", root = makePath("app/download/"), download = "RWITData.db")
+			except Exception as error:
+				print "An error occurred during export {}".format(error)
+				return None
 		elif request.forms.get("csv"):
 			return "CSV file export not yet implemented. Please use the SQLite export function."
 	else:
@@ -148,7 +186,7 @@ datasetNames = {"sessions": "Session", "eno": "Education & Outreach"}
 # === Database Stuff ===
 
 from os import listdir, remove
-import sqlite3, json, shutil, csv
+import sqlite3, json, shutil, csv, re
 
 class DatabaseManager(object):
 	"""Keeps track of database connections and provides convenience methods for interacting with them"""
@@ -301,6 +339,15 @@ class SessionsDatabaseManager(DatabaseManager):
 						pass
 					return True
 			return False
+		# Reorder term names from RWIT Online (e.g. "X17" -> "17X")
+		def reorderTermNameInDict(dict, key = "term"):
+			originalTerm = dict.get(key)
+			regex = re.search(r"(F|W|S|X)(\d{2})", originalTerm)
+			if len(regex.groups()) > 0:
+				quarter = regex.group(1)
+				year = regex.group(2)
+				reorderedTerm = year + quarter
+				dict[key] = reorderedTerm
 		
 		# Do the actual import legwork
 		
@@ -408,9 +455,11 @@ class SessionsDatabaseManager(DatabaseManager):
 			
 			# Writing assistant sessions are pretty different, so just handle the two cases separately.
 			# `attendees` has some content for WA sessions, even if it's just "[]", but it's blank on center sessions
+			# [TODO ngreenstein] Verify above. Showing no recent WA sessions except during 17S and 15S.
 			if len(csvRow.get("attendees")) > 0:
 				
 				waSessionVals = valuesDictFromBindingsAndCsvRow(waSessionBindings, csvRow)
+				reorderTermNameInDict(waSessionVals)
 				# For WA sessions, the info in the client fields actually describes the tutor,
 				# so treat tutors as real people instead of stubs.
 				tutorVals = valuesDictFromBindingsAndCsvRow(clientBindings, csvRow)
@@ -427,6 +476,7 @@ class SessionsDatabaseManager(DatabaseManager):
 				
 				# Assemble basic values from bindings/CSV row
 				centerSessionVals = valuesDictFromBindingsAndCsvRow(centerSessionBindings, csvRow)
+				reorderTermNameInDict(centerSessionVals)
 				clientVals = valuesDictFromBindingsAndCsvRow(clientBindings, csvRow)
 				tutorName = csvRow.get("tutor_name")
 				clientRecordVals = valuesDictFromBindingsAndCsvRow(clientRecordBindings, csvRow)

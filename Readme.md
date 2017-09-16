@@ -13,7 +13,7 @@ Many features are still in progress, but the following work:
 
 - Import sessions data from RWIT Online CSV files (either adding to or replacing the existing database)
 - Import sessions data from SQLite files created by RWITData (either adding to or replacing the existing database)
-- Export sessions data for all terms as SQLite files
+- Export sessions data for all terms or selected terms as SQLite files
 
 The recommended workflow for the app in its current state is:
 
