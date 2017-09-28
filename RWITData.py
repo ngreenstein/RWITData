@@ -37,8 +37,8 @@ def index():
 def data(dataset):
 	return template(makePath("app/templates/data.tpl"), basePath = basePath, dataset=dataset, datasetName=datasetNames.get(dataset), savedQueries=SavedQuery.loadAllForDataset(dataset))
 	
-@bottleApp.post("/data/<dataset:re:sessions|eno>/query")
-def query(dataset):
+@bottleApp.post("/data/<dataset:re:sessions|eno>/saved-query")
+def savedQuery(dataset):
 	hashVal = int(request.forms.get("hash"))
 	savedQueries = SavedQuery.loadAllForDataset(dataset)
 	matchedQueries = [query for query in savedQueries if query.hash == hashVal]
@@ -56,14 +56,26 @@ def query(dataset):
 		# print thisQuery.prepQuery()
 		# print thisQuery.prepValues()
 		cursor = db.connection.cursor()
-		# todo better handling of errors when running sql
+		# todo better handling of errors when running sql; make access read-only if possible
 		cursor.execute(thisQuery.prepQuery(), thisQuery.prepValues())
 		description = [col[0] for col in cursor.description]
 		results = cursor.fetchall()
-		return template(makePath("app/templates/results.tpl"), basePath = basePath, query = thisQuery, results = results, rowHeads = description)
+		return template(makePath("app/templates/results.tpl"), basePath = basePath, queryTitle = thisQuery.name, results = results, rowHeads = description)
 	else:
 		# todo better error handling here
 		redirect("/data/" + dataset) # If no queries match, user must not have arrived via data page, so redirect them.
+
+@bottleApp.post("/data/<dataset:re:sessions|eno>/custom-query")
+def customQuery(dataset):
+	query = request.forms.get("query")
+	db = sessionsDb
+	if dataset == "eno": db = enoDb
+	cursor = db.connection.cursor()
+	# todo better handling of errors when running sql; make access read-only if possible
+	cursor.execute(query)
+	description = [col[0] for col in cursor.description]
+	results = cursor.fetchall()
+	return template(makePath("app/templates/results.tpl"), basePath = basePath, queryTitle = "Custom Query", results = results, rowHeads = description)
 
 @bottleApp.route("/admin/<dataset:re:sessions|eno>")
 def admin(dataset):

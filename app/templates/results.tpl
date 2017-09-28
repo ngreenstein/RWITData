@@ -1,6 +1,6 @@
-% include(basePath + "app/templates/header.tpl", title="Saved Query Results")
+% include(basePath + "app/templates/header.tpl", title="Query Results")
 
-<h1>{{query.name}}</h1>
+<h1>{{queryTitle}}</h1>
 
 <table class="table table-striped table-hover table-condensed table-bordered">
 	<thead>

@@ -29,7 +29,7 @@ include(basePath + "app/templates/header.tpl", title=pageTitle)
 				<p>{{savedQuery.description}}</p>
 			 	<div class="col-md-4 col-lg-4 no-gutter">
 				 	
-					<form data-toggle="validator" action="/data/{{dataset}}/query" method="post">
+					<form data-toggle="validator" action="/data/{{dataset}}/saved-query" method="post">
 						
 						<input type="hidden" name="hash" value="{{savedQuery.hash}}">
 						
@@ -41,7 +41,7 @@ include(basePath + "app/templates/header.tpl", title=pageTitle)
 						<div class="form-group">
 							<label for="sq{{queryIndex}}-param{{paramIndex}}">{{param.name}}</label>
 							% if paramType == "text":
-							<input
+							<input type="text"
 							% elif paramType == "select":
 							<select multiple
 							% elif paramType == "bool":
@@ -97,6 +97,15 @@ include(basePath + "app/templates/header.tpl", title=pageTitle)
 
 
 <h2>Custom Query</h2>
-<p>coming soon</p>
+
+<div class="col-md-6 col-lg-6 no-gutter">
+	<form data-toggle="validator" action="/data/{{dataset}}/custom-query" method="post">
+		<div class="form-group">
+			<label for="customQuery">SQLite Query:</label>
+			<textarea required id="customQuery" name="query" class="form-control" rows="3"></textarea>
+		</div>
+		<input type="submit" class="btn btn-primary" value="Run Query">
+	</form>
+</div>
 
 % include(basePath + "app/templates/footer.tpl")
