@@ -1,8 +1,12 @@
 % include(basePath + "app/templates/header.tpl", title="Query Results")
 
+<link rel="stylesheet" href="/static/theme.bootstrap_3.css">
+
 <h1>{{queryTitle}}</h1>
 
-<table class="table table-striped table-hover table-condensed table-bordered">
+<p>{{len(results)}} rows returned</p>
+
+<table class="table table-hover table-condensed table-bordered" id="results-table">
 	<thead>
 		<tr>
 			% for col in rowHeads:
@@ -21,6 +25,4 @@
 	</tbody>
 </table>
 
-<p>{{len(results)}} rows returned</p>
-
-% include(basePath + "app/templates/footer.tpl")
+% include(basePath + "app/templates/footer.tpl", scripts = ["/static/jquery.tablesorter.combined.js", "/static/results.js"])
