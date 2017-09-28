@@ -1,15 +1,11 @@
 {
-	"name": "Sessions by Tutor",
-	"description": "Finds all sessions associated with a given tutor, as identified by name and, optionally, class year.",
-	"query": "SELECT * FROM sessions WHERE tutorName = ? and tutorYear = ?;",
+	"name": "Center Sessions by Tutor",
+	"description": "Finds all center sessions associated with a given tutor, as identified by name.",
+	"query": "SELECT * FROM centerSessions INNER JOIN tutorStubs ON tutorStubs.id = centerSessions.tutorId WHERE tutorStubs.name = ?;",
 	"parameters": [{
 						"name": "Tutor Name",
 						"type": "text",
-						"required": true
-					},
-					{
-						"name": "Tutor Year",
-						"type": "text",
-						"required": false
+						"required": true,
+						"allowMulti": false
 					}]
 }

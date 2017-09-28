@@ -11,7 +11,7 @@ enoDb = None
 
 # === Webserver Stuff ===
 
-from app.lib.bottle import Bottle, run, template, static_file, request
+from app.lib.bottle import Bottle, run, template, static_file, request, redirect
 from shutil import copyfile
 import os.path, tempfile, sys
 
@@ -39,19 +39,35 @@ def data(dataset):
 	
 @bottleApp.post("/data/<dataset:re:sessions|eno>/query")
 def query(dataset):
-	return "Saved query execution not yet implemented."
 	hashVal = int(request.forms.get("hash"))
 	savedQueries = SavedQuery.loadAllForDataset(dataset)
 	matchedQueries = [query for query in savedQueries if query.hash == hashVal]
 	if len(matchedQueries) > 0:
 		thisQuery = matchedQueries[0]
-		return thisQuery.name
+		i = 0
+		for param in thisQuery.parameters:
+			param.values = request.forms.getall("param" + str(i))
+			i += 1
+		if not thisQuery.validateParamValues():
+			print "Unable to execute saved query {}: invalid parameter values".format(thisQuery.name)
+			return None # invalid query
+		db = sessionsDb
+		if dataset == "eno": db = enoDb
+		# print thisQuery.prepQuery()
+		# print thisQuery.prepValues()
+		cursor = db.connection.cursor()
+		# todo better handling of errors when running sql
+		cursor.execute(thisQuery.prepQuery(), thisQuery.prepValues())
+		description = [col[0] for col in cursor.description]
+		results = cursor.fetchall()
+		return template(makePath("app/templates/results.tpl"), basePath = basePath, query = thisQuery, results = results, rowHeads = description)
 	else:
-		return None
+		# todo better error handling here
+		redirect("/data/" + dataset) # If no queries match, user must not have arrived via data page, so redirect them.
 
 @bottleApp.route("/admin/<dataset:re:sessions|eno>")
 def admin(dataset):
-	return template(makePath("app/templates/admin.tpl"), basePath = basePath, dataset=dataset, datasetName=datasetNames.get(dataset))
+	return template(makePath("app/templates/admin.tpl"), basePath = basePath, dataset = dataset, datasetName = datasetNames.get(dataset))
 	
 @bottleApp.post("/admin/<dataset:re:sessions|eno>/export")
 def exp(dataset):
@@ -544,26 +560,73 @@ class SavedQuery(object):
 		
 	def __str__(self):
 		return "SavedQuery '{}' ({} parameters)".format(self.name, len(self.parameters))
+		
+	def validateParamValues(self):
+		valid = True
+		for param in self.parameters:
+			val = param.values
+			if len(val) == 0 and param.required == True:
+				print "Invalid parameter values: no value specified for required parameter {}".format(param.name)
+				valid = False
+			if param.paramType == "select":
+				for thisVal in val:
+					if not thisVal in param.options:
+							print "Invalid parameter values: invalid selection '{}' for parameter {}".format(thisVal, param.name)
+							valid = False
+			if param.paramType == "bool":
+				for thisVal in val:
+					if thisVal not in ["Yes", "No"]:
+						print "Invalid parameter values: invalid value '{}' for boolean parameter {}".format(thisVal, param.name)
+						valid = False
+		return valid
+	
+	# Rewrite queries to have the proper number of placeholders. Allows for selection of multiple values.
+	def prepQuery(self):
+		chunks = re.split("\?", self.query)
+		newQuery = ""
+		for i in range(len(chunks) - 1):
+			val = self.parameters[i].values
+			ph = "?"
+			if isinstance(val, list):
+				ph = ",".join("?"*len(val))
+			newQuery += chunks[i] + ph
+		newQuery += chunks[-1]
+		return newQuery
+	
+	# Flatten parameter values so they can be fed to the SQLite module as one list
+	def prepValues(self):
+		nested = [param.values for param in self.parameters]
+		flat = []
+		for val in nested:
+			if isinstance(val, list):
+				flat.extend(val)
+			else:
+				flat.append(val)
+		return flat
 
 	@classmethod
 	def initFromJsonString(self, jsonString):
 		try:
+			# `loads` puts everything in unicode; hence various str() casts below
 			parsedJson = json.loads(jsonString)
 		except:
 			print "Error loading saved query: couldn't parse json"
 			return None
-		name = parsedJson.get("name", "")
-		description = parsedJson.get("description", "")
-		query = parsedJson.get("query", "")
-		parameters = parsedJson.get("parameters", [])
-		# TODO add validation of each param
+		name = str(parsedJson.get("name", ""))
+		description = str(parsedJson.get("description", ""))
+		query = str(parsedJson.get("query", ""))
+		unicodeParams = parsedJson.get("parameters", [])
+		params = []
+		for thisParam in unicodeParams:
+			paramObj = SavedQuery.Parameter.initFromJsonDict(thisParam)
+			params.append(paramObj)
 		if name == "" or query == "":
 			print "Error loading saved query '{}': name and query are required".format(name)
 			return None
-		if len(parameters) != query.count("?"):
-			print "Error loading saved query '{}': number of parameters ({}) must match number of placeholders in query ({})".format(name, len(parameters), query.count("?"))
+		if len(params) != query.count("?"):
+			print "Error loading saved query '{}': number of parameters ({}) must match number of placeholders in query ({})".format(name, len(params), query.count("?"))
 			return None
-		return SavedQuery(name=name, description=description, query=query, parameters=parameters)
+		return SavedQuery(name=name, description=description, query=query, parameters=params)
 		
 	@staticmethod
 	def loadAllForDataset(dataset):
@@ -585,7 +648,55 @@ class SavedQuery(object):
 						print "Error loading saved query '{}': identical query already loaded under name '{}'".format(thisQuery.name, identicalQueries[0].name)
 		parsedQueries = sorted(parsedQueries, key=lambda k: k.name) # Alphabetize the list
 		return parsedQueries
-
+		
+	class Parameter(object):
+		"""A parameter for a prepared database query"""
+		
+		def __init__(self, name = "", paramType = "", options = [], required = False, allowMulti = True, values = []):
+			self.name = name
+			self.paramType = paramType
+			self.options = options
+			self.required = required if required else False # Turn None into False
+			self.allowMulti = True if allowMulti or allowMulti == None else False # Turn None into True
+			self.values = values
+		
+		# Value declared as property so that setter can do some cleanup
+		@property
+		def values(self):
+			return self._values
+		@values.setter
+		def values(self, val):
+			# If multiple selections are allowed and any values are strings with multiple comma-separated items, split them up
+			newVals = []
+			for thisVal in val:
+				if isinstance(thisVal, str):
+					if self.allowMulti:
+						thisVal = re.split(",\s*", thisVal)
+					else:
+						thisVal = [thisVal]
+				newVals.extend(thisVal)
+			self._values = newVals
+		
+		def __str__(self):
+			return "Parameter '{}' ({}, type '{}')".format(self.name, "required" if self.required else "optional", self.paramType)
+		
+		@classmethod	
+		def initFromJsonDict(self, jsonDict):
+			# Convert unicode stuff into normal strings
+			paramDetails = {}
+			for key, val in jsonDict.iteritems():
+				strKey = str(key)
+				strVal = ""
+				if isinstance(val, list): # Deal with unicode options arrays
+					strVal = [str(thisVal) for thisVal in val]
+				elif isinstance(val, bool): # Keep bool vals as bool, not str
+					strVal = val
+				else:
+					strVal = str(val)
+				paramDetails[strKey] = strVal
+			# Build the parameter object
+			paramObj = SavedQuery.Parameter(paramDetails.get("name"), paramDetails.get("type"), paramDetails.get("options"), paramDetails.get("required"), paramDetails.get("allowMulti"))
+			return paramObj
 
 # Look for the databases and create them if they do not exist
 
@@ -632,7 +743,6 @@ if not DEBUG:
 	welcomeString += "== simply close this window.            ==\n"
 	welcomeString += "==========================================\n"
 	print welcomeString
-					  
 
 run(bottleApp, host="localhost", port=8888, debug=DEBUG, reloader=DEBUG)
 

@@ -36,10 +36,10 @@ include(basePath + "app/templates/header.tpl", title=pageTitle)
 						<%
 						paramIndex = 0
 						for param in savedQuery.parameters:
-						paramType = param.get("type")
+						paramType = param.paramType
 						%>
 						<div class="form-group">
-							<label for="sq{{queryIndex}}-param{{paramIndex}}">{{param.get("name")}}</label>
+							<label for="sq{{queryIndex}}-param{{paramIndex}}">{{param.name}}</label>
 							% if paramType == "text":
 							<input
 							% elif paramType == "select":
@@ -47,19 +47,24 @@ include(basePath + "app/templates/header.tpl", title=pageTitle)
 							% elif paramType == "bool":
 							<select
 							% end
-							% if param.get("required"):
+							% #if param.required: #todo add support for optional params
 							required
-							% end
+							% #end
 							id="sq{{queryIndex}}-param{{paramIndex}}" name="param{{paramIndex}}" class="form-control">
 							% if paramType == "text":
 							</input>
+								% if param.allowMulti:
+							<p class="form-tip"><em>Separate multiple entries with commas.</em><p>
+								% end
 							<% elif paramType == "select":
-							for option in param.get("options", []):
+							for option in param.options:
 							%>
 								<option>{{option}}</option>
 							% end
 							</select>
+							% if param.allowMulti:
 							<p class="form-tip"><em>Hold <kbd>command</kbd> (Mac) or <kbd>control</kbd> (PC) to select multiple options.</em><p>
+							% end
 							% elif paramType == "bool":
 								<option></option>
 								<option>Yes</option>

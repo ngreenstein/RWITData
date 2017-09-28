@@ -1,0 +1,10 @@
+{
+	"name": "Sessions by Tutor ID",
+	"description": "Finds all sessions associated with a given tutor, as identified by ID.",
+	"query": "SELECT * FROM centerSessions WHERE tutorId = ?;",
+	"parameters": [{
+						"name": "Tutor ID",
+						"type": "text",
+						"required": true
+					}]
+}

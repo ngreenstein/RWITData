@@ -1,0 +1,17 @@
+{
+	"name": "Center Sessions by Type and Term",
+	"description": "Finds center sessions of a specified type, optionally filtering by term.",
+	"query": "SELECT * FROM centerSessions WHERE type IN (?) AND term IN (?);",
+	"parameters": [{
+						"name": "Type",
+						"type": "select",
+						"required": true,
+						"options": ["ScheduledSession", "Walkin"]
+					},
+					{
+						"name": "Term",
+						"type": "text",
+						"required": false
+					}]
+}
+
