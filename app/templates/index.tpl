@@ -4,6 +4,6 @@
 <h1>RWITData</h1>
 
 <p>Welcome to RWITData! To begin, select a function and dataset above.</p>
-<p>Consult the <a href="about">About</a> page for more information.</p>
+<p>Consult the <a href="about/">About</a> page for more information.</p>
 
 % include(basePath + "app/templates/footer.tpl")

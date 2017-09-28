@@ -12,7 +12,7 @@ include(basePath + "app/templates/header.tpl", title=pageTitle)
 </div>
 
 <div class="row container">
-	<form class="col-md-4 col-lg-4 no-gutter" data-toggle="validator" action="/admin/{{dataset}}/export" method="post">
+	<form class="col-md-4 col-lg-4 no-gutter" data-toggle="validator" action="/admin/{{dataset}}/export/" method="post">
 		<div class="form-group">
 			<label for="exportTerms">Terms:</label>
 			<input type="text" class="form-control" id="exportTerms" name="exportTerms" placeholder="e.g. '17S, 17X'" pattern="(\d{2}(F|W|S|X)(,\s+)?)+">
@@ -30,7 +30,7 @@ include(basePath + "app/templates/header.tpl", title=pageTitle)
 </div>
 
 <div class="row container" id="importRow">
-	<form class="col-md-4 col-lg-4 no-gutter" id="importForm" data-toggle="validator" action="/admin/{{dataset}}/import" method="post" enctype="multipart/form-data">
+	<form class="col-md-4 col-lg-4 no-gutter" id="importForm" data-toggle="validator" action="/admin/{{dataset}}/import/" method="post" enctype="multipart/form-data">
 		<div class="form-group">
 			<label for="importFile">File</label>
 			<input type="file" id="importFile" name="importFile" required accept=".csv,.db,.sqlite,.sqlite3,.db3">

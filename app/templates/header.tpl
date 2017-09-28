@@ -19,23 +19,23 @@
 				<li class="dropdown">
 					<a data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Data <span class="caret"></span></a>
 					<ul class="dropdown-menu">
-						<li><a href="/data/sessions">Sessions</a></li>
-						<li><a href="/data/eno">E&O</a></li>
+						<li><a href="/data/sessions/">Sessions</a></li>
+						<li><a href="/data/eno/">E&O</a></li>
 					</ul>
 				</li>
 			
 				<li class="dropdown">
 					<a data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Admin <span class="caret"></span></a>
 					<ul class="dropdown-menu">
-						<li><a href="/admin/sessions">Sessions</a></li>
-						<li><a href="/admin/eno">E&O</a></li>
+						<li><a href="/admin/sessions/">Sessions</a></li>
+						<li><a href="/admin/eno/">E&O</a></li>
 					</ul>
 				</li>
 				
 			</ul>
 			
 			<ul class="nav navbar-nav navbar-right">
-				<li><a class="" href="/about">About</a></li>
+				<li><a class="" href="/about/">About</a></li>
 			</ul>
 			
 		</div>
