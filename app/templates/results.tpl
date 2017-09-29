@@ -6,6 +6,10 @@
 
 <p>{{len(results)}} rows returned</p>
 
+<div class="form-group">
+	<a class="btn btn-default" href="../export-results/{{resultsHash}}/">Export CSV</a>
+</div>
+
 <table class="table table-hover table-condensed table-bordered" id="results-table">
 	<thead>
 		<tr>

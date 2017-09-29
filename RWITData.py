@@ -13,7 +13,7 @@ enoDb = None
 
 from app.lib.bottle import Bottle, run, template, static_file, request, redirect
 from shutil import copyfile
-import os.path, tempfile, sys
+import os, tempfile, sys, csv
 
 FROZEN = getattr(sys, "frozen", False)
 
@@ -33,11 +33,11 @@ bottleApp = Bottle()
 def index():
 	return template(makePath("app/templates/index.tpl"), basePath = basePath)
 	
-@bottleApp.route("/data/<dataset:re:sessions|eno>")
+@bottleApp.route("/data/<dataset:re:sessions|eno>/")
 def data(dataset):
-	return template(makePath("app/templates/data.tpl"), basePath = basePath, dataset=dataset, datasetName=datasetNames.get(dataset), savedQueries=SavedQuery.loadAllForDataset(dataset))
+	return template(makePath("app/templates/data.tpl/"), basePath = basePath, dataset=dataset, datasetName=datasetNames.get(dataset), savedQueries=SavedQuery.loadAllForDataset(dataset))
 	
-@bottleApp.post("/data/<dataset:re:sessions|eno>/saved-query")
+@bottleApp.post("/data/<dataset:re:sessions|eno>/saved-query/")
 def savedQuery(dataset):
 	hashVal = int(request.forms.get("hash"))
 	savedQueries = SavedQuery.loadAllForDataset(dataset)
@@ -60,12 +60,13 @@ def savedQuery(dataset):
 		cursor.execute(thisQuery.prepQuery(), thisQuery.prepValues())
 		description = [col[0] for col in cursor.description]
 		results = cursor.fetchall()
-		return template(makePath("app/templates/results.tpl"), basePath = basePath, queryTitle = thisQuery.name, results = results, rowHeads = description)
+		csvPath, resultsHash = DatabaseManager.hashAndSaveResults(results, description)
+		return template(makePath("app/templates/results.tpl"), basePath = basePath, queryTitle = thisQuery.name, results = results, resultsHash = resultsHash, rowHeads = description)
 	else:
 		# todo better error handling here
 		redirect("/data/" + dataset) # If no queries match, user must not have arrived via data page, so redirect them.
 
-@bottleApp.post("/data/<dataset:re:sessions|eno>/custom-query")
+@bottleApp.post("/data/<dataset:re:sessions|eno>/custom-query/")
 def customQuery(dataset):
 	query = request.forms.get("query")
 	db = sessionsDb
@@ -75,13 +76,23 @@ def customQuery(dataset):
 	cursor.execute(query)
 	description = [col[0] for col in cursor.description]
 	results = cursor.fetchall()
-	return template(makePath("app/templates/results.tpl"), basePath = basePath, queryTitle = "Custom Query", results = results, rowHeads = description)
-
-@bottleApp.route("/admin/<dataset:re:sessions|eno>")
-def admin(dataset):
-	return template(makePath("app/templates/admin.tpl"), basePath = basePath, dataset = dataset, datasetName = datasetNames.get(dataset))
+	csvPath, resultsHash = DatabaseManager.hashAndSaveResults(results, description)
+	return template(makePath("app/templates/results.tpl"), basePath = basePath, queryTitle = "Custom Query", results = results, resultsHash = resultsHash, rowHeads = description)
 	
-@bottleApp.post("/admin/<dataset:re:sessions|eno>/export")
+@bottleApp.route("/data/<dataset:re:sessions|eno>/export-results/<resultsHash>/")
+def exportResults(dataset, resultsHash):
+	resultsPath = makePath("app/download/results-{}.csv".format(resultsHash))
+	if os.path.isfile(resultsPath):
+		return static_file("results-{}.csv".format(resultsHash), root = makePath("app/download/"), download = "QueryResults.csv")
+	else:
+		return "Unable to export results. Try running your query again."
+		# todo better error handling
+
+@bottleApp.route("/admin/<dataset:re:sessions|eno>/")
+def admin(dataset):
+	return template(makePath("app/templates/admin.tpl/"), basePath = basePath, dataset = dataset, datasetName = datasetNames.get(dataset))
+	
+@bottleApp.post("/admin/<dataset:re:sessions|eno>/export/")
 def exp(dataset):
 	terms = request.forms.get("exportTerms")
 	if len(terms) > 0:
@@ -145,7 +156,7 @@ def exp(dataset):
 	else:
 		return "E&O export not yet implemented."
 	
-@bottleApp.post("/admin/<dataset:re:sessions|eno>/import")
+@bottleApp.post("/admin/<dataset:re:sessions|eno>/import/")
 def imp(dataset):
 	try:
 		mode = ""
@@ -160,7 +171,7 @@ def imp(dataset):
 		if os.fstat(importFile.file.fileno()).st_size > 100000000:
 			return "BAD: file too large (more than 100MB)"
 			
-		tempFilePath = tempfile.gettempdir() + "temp-incoming-import" + ext
+		tempFilePath = tempfile.gettempdir() + "/temp-incoming-import" + ext
 		importFile.save(tempFilePath, overwrite=True)
 		
 		global sessionsDb, enoDb
@@ -200,7 +211,7 @@ def imp(dataset):
 	
 	return "<p>Import {} data from {} in {} mode</p>".format(dataset, importFile.filename, mode)
 	
-@bottleApp.route("/about")
+@bottleApp.route("/about/")
 def about():
 	return template(makePath("app/templates/about.tpl"), basePath = basePath)
 	
@@ -291,6 +302,18 @@ class DatabaseManager(object):
 				self.connection.execute("INSERT OR IGNORE INTO {} SELECT * FROM incomingDb.{};".format(thisTable, thisTable))
 			self.connection.execute("DETACH incomingDb;")
 			self.connection.commit()
+	
+	# Dump a CSV copy of a results list, identified by hash, into a temporary folder.
+	# CSV files are later served via the /export-results/ endpoint.
+	@staticmethod
+	def hashAndSaveResults(results = [], headers = ""):
+		resultsHash = hash(str(headers)+str(results))
+		filePath = makePath("app/download/results-" + str(resultsHash) + ".csv")
+		with open(filePath, "wb") as file:
+			writer = csv.writer(file)
+			writer.writerow(headers)
+			writer.writerows(results)
+		return (filePath, resultsHash)
 	
 	# Dumps the schema of a database connection into a string (just for use in comparing schemas; not actually meant to be stored)
 	@staticmethod
@@ -760,3 +783,6 @@ run(bottleApp, host="localhost", port=8888, debug=DEBUG, reloader=DEBUG)
 
 sessionsDb.connection.close()
 enoDb.connection.close()
+
+shutil.rmtree(makePath("app/download"))
+os.mkdir(makePath("app/download"))
