@@ -23,6 +23,8 @@ if FROZEN:
 basePath = ""
 if FROZEN:
 	basePath += os.path.dirname(sys.executable) + "/"
+	
+startupError = (None, None)
 
 def makePath(localPath):
 	return basePath + localPath
@@ -31,7 +33,16 @@ bottleApp = Bottle()
 
 @bottleApp.route("/")
 def index():
-	return template(makePath("app/templates/index.tpl"), basePath = basePath)
+	# If an error occured during startup, show it the fist time the homepage is loaded.
+	global startupError
+	if startupError[0]:
+		shortMsg = startupError[0]
+		longMsg = None
+		if len(startupError) > 1: longMsg = str(startupError[1])
+		startupError = (None, None)
+		return template(makePath("app/templates/error.tpl"), basePath = basePath, shortMessage = shortMsg, longMessage = longMsg)
+	else:
+		return template(makePath("app/templates/index.tpl"), basePath = basePath)
 	
 @bottleApp.route("/data/<dataset:re:sessions|eno>/")
 def data(dataset):
@@ -48,36 +59,49 @@ def savedQuery(dataset):
 		for param in thisQuery.parameters:
 			param.values = request.forms.getall("param" + str(i))
 			i += 1
-		if not thisQuery.validateParamValues():
-			print "Unable to execute saved query {}: invalid parameter values".format(thisQuery.name)
-			return None # invalid query
-		db = sessionsDb
-		if dataset == "eno": db = enoDb
-		# print thisQuery.prepQuery()
-		# print thisQuery.prepValues()
-		cursor = db.connection.cursor()
-		# todo better handling of errors when running sql; make access read-only if possible
-		cursor.execute(thisQuery.prepQuery(), thisQuery.prepValues())
-		description = [col[0] for col in cursor.description]
-		results = cursor.fetchall()
-		csvPath, resultsHash = DatabaseManager.hashAndSaveResults(results, description)
-		return template(makePath("app/templates/results.tpl"), basePath = basePath, queryTitle = thisQuery.name, results = results, resultsHash = resultsHash, rowHeads = description)
+		paramValidation = thisQuery.validateParamValues()
+		if len(paramValidation) > 0:
+			shortMsg = "Unable to execute saved query '{}': invalid parameter values.".format(thisQuery.name)
+			return template(makePath("app/templates/error.tpl"), basePath = basePath, shortMessage = shortMsg, longMessage = "\n".join(paramValidation))
+		try:
+			db = sessionsDb
+			if dataset == "eno": db = enoDb
+			# print thisQuery.prepQuery()
+			# print thisQuery.prepValues()
+			cursor = db.connection.cursor()
+			cursor.execute(thisQuery.prepQuery(), thisQuery.prepValues())
+			description = []
+			if cursor.description:
+				description = [col[0] for col in cursor.description]
+			results = cursor.fetchall()
+			csvPath, resultsHash = DatabaseManager.hashAndSaveResults(results, description)
+			return template(makePath("app/templates/results.tpl"), basePath = basePath, queryTitle = thisQuery.name, results = results, resultsHash = resultsHash, rowHeads = description)
+		except Exception as error:
+			shortMsg = "Unable to execute saved query '{}'.".format(thisQuery.name)
+			return template(makePath("app/templates/error.tpl"), basePath = basePath, shortMessage = shortMsg, longMessage = str(error))
 	else:
-		# todo better error handling here
-		redirect("/data/" + dataset) # If no queries match, user must not have arrived via data page, so redirect them.
+		shortMsg = "The requested saved query was not found."
+		return template(makePath("app/templates/error.tpl"), basePath = basePath, shortMessage = shortMsg)
 
 @bottleApp.post("/data/<dataset:re:sessions|eno>/custom-query/")
 def customQuery(dataset):
-	query = request.forms.get("query")
-	db = sessionsDb
-	if dataset == "eno": db = enoDb
-	cursor = db.connection.cursor()
-	# todo better handling of errors when running sql; make access read-only if possible
-	cursor.execute(query)
-	description = [col[0] for col in cursor.description]
-	results = cursor.fetchall()
-	csvPath, resultsHash = DatabaseManager.hashAndSaveResults(results, description)
-	return template(makePath("app/templates/results.tpl"), basePath = basePath, queryTitle = "Custom Query", results = results, resultsHash = resultsHash, rowHeads = description)
+	try:
+		query = request.forms.get("query")
+		db = sessionsDb
+		if dataset == "eno": db = enoDb
+		# Commit anything done before this starts so we can rollback afterwards without losing anything we might have wanted to keep
+		cursor = db.connection.cursor()
+		# todo better handling of errors when running sql; make access read-only if possible
+		cursor.execute(query)
+		description = []
+		if cursor.description:
+			description = [col[0] for col in cursor.description]
+		results = cursor.fetchall()
+		csvPath, resultsHash = DatabaseManager.hashAndSaveResults(results, description)
+		return template(makePath("app/templates/results.tpl"), basePath = basePath, queryTitle = "Custom Query", results = results, resultsHash = resultsHash, rowHeads = description)
+	except Exception as error:
+		shortMsg = "Unable to execute custom query."
+		return template(makePath("app/templates/error.tpl"), basePath = basePath, shortMessage = shortMsg, longMessage = str(error))
 	
 @bottleApp.route("/data/<dataset:re:sessions|eno>/export-results/<resultsHash>/")
 def exportResults(dataset, resultsHash):
@@ -85,8 +109,8 @@ def exportResults(dataset, resultsHash):
 	if os.path.isfile(resultsPath):
 		return static_file("results-{}.csv".format(resultsHash), root = makePath("app/download/"), download = "QueryResults.csv")
 	else:
-		return "Unable to export results. Try running your query again."
-		# todo better error handling
+		errMsg = "Unable to export results. Try running your query again."
+		return template(makePath("app/templates/error.tpl"), basePath = basePath, shortMessage = errMsg)
 
 @bottleApp.route("/admin/<dataset:re:sessions|eno>/")
 def admin(dataset):
@@ -149,8 +173,8 @@ def exp(dataset):
 					tempDb.connection.commit()
 				return static_file("temp-export.db", root = makePath("app/download/"), download = "RWITData.db")
 			except Exception as error:
-				print "An error occurred during export {}".format(error)
-				return None
+				shortMsg = "Unable to complete export."
+				return template(makePath("app/templates/error.tpl"), basePath = basePath, shortMessage = shortMsg, longMessage = str(error))
 		elif request.forms.get("csv"):
 			return "CSV file export not yet implemented. Please use the SQLite export function."
 	else:
@@ -167,9 +191,11 @@ def imp(dataset):
 		importFile = request.files.get("importFile")
 		name, ext = os.path.splitext(importFile.filename)
 		if ext not in (".csv", ".db", ".sqlite", ".sqlite3", ".db3"):
-			return "BAD: invalid filetype"
+			shortMsg = "Unable to import from '{}' because filetype is not CSV or SQLite. Try another file.".format(importFile.filename)
+			return template(makePath("app/templates/error.tpl"), basePath = basePath, shortMessage = shortMsg)
 		if os.fstat(importFile.file.fileno()).st_size > 100000000:
-			return "BAD: file too large (more than 100MB)"
+			shortMsg = "Unable to import from '{}' because file is larger than 100MB. Try another file.".format(importFile.filename)
+			return template(makePath("app/templates/error.tpl"), basePath = basePath, shortMessage = shortMsg)
 			
 		tempFilePath = tempfile.gettempdir() + "/temp-incoming-import" + ext
 		importFile.save(tempFilePath, overwrite=True)
@@ -180,19 +206,24 @@ def imp(dataset):
 		# At least use constants instead of string literals.
 		if dataset == "sessions":
 			if mode == "add":
+				outcome = None
 				if ext == ".csv":
-					sessionsDb.addFromCsv(tempFilePath)
+					outcome = sessionsDb.addFromCsv(tempFilePath)
 				else: # All other extensions are sqlite
-					sessionsDb.addFromSqlite(tempFilePath)
+					outcome = sessionsDb.addFromSqlite(tempFilePath)
+				if not isinstance(outcome, DatabaseManager):
+					return template(makePath("app/templates/error.tpl"), basePath = basePath, shortMessage = outcome[0], longMessage = outcome[1])
 			elif mode == "replace":
 				newDb = None
 				if ext == ".csv":
 					newDb = SessionsDatabaseManager.replaceFromCsv(tempFilePath)
 				else: # All other extensions are sqlite
 					newDb = SessionsDatabaseManager.replaceFromSqlite(tempFilePath)
-				if newDb:
+				if isinstance(newDb, DatabaseManager):
 					sessionsDb.connection.close()
 					sessionsDb = newDb
+				else:
+					return template(makePath("app/templates/error.tpl"), basePath = basePath, shortMessage = newDb[0], longMessage = newDb[1])
 		elif dataset == "eno":
 			return "E&O import is not yet implemented."
 			if mode == "add":
@@ -207,9 +238,11 @@ def imp(dataset):
 					EnoDatabaseManager.replaceFromSqlite(tempFilePath)
 	
 	except Exception as error:
-		print "An error occurred during import {}".format(error)
+		shortMsg = "Unable to complete import."
+		return template(makePath("app/templates/error.tpl"), basePath = basePath, shortMessage = shortMsg, longMessage = str(error))
 	
 	return "<p>Import {} data from {} in {} mode</p>".format(dataset, importFile.filename, mode)
+	# todo show some pretty success message instead of this^
 	
 @bottleApp.route("/about/")
 def about():
@@ -244,7 +277,7 @@ class DatabaseManager(object):
 	def replaceFromCsv(cls, csvPath):
 		# Make an empty database, use the addFromCsv() machinery to load the CSV data into it,
 		# and use the the replaceFromSqlite() machinery to get rid of the old database.
-		tempPath = tempfile.gettempdir() + "temp-incoming-import.db"
+		tempPath = tempfile.gettempdir() + "/temp-incoming-import.db"
 		# Make sure nothing is lingering; we want a fresh database
 		try:
 			os.remove(tempPath)
@@ -256,52 +289,83 @@ class DatabaseManager(object):
 		createScript = schemaFile.read()
 		schemaFile.close()
 		tempDb.connection.executescript(createScript)
-		tempDb.addFromCsv(csvPath)
+		addResult = tempDb.addFromCsv(csvPath) # Captures errors on individual rows but recovers and keeps going
 		tempDb.connection.close()
-		return cls.replaceFromSqlite(tempPath)
+		replaceResult = cls.replaceFromSqlite(tempPath) # Either succeeds or fails
+		
+		# Kinda messy but allows reporting of errors on addFromCSV, replaceFromSqlite, or both.
+		addErrored = isinstance(addResult, tuple)
+		replaceErrored = isinstance(replaceResult, tuple)
+		shortMsg = ""
+		longMsg = ""
+		if addErrored and replaceErrored:
+			shortMsg = "Unable to replace database from CSV file '{}' for the following reason: '{}'.".format(os.path.basename(csvPath), replaceResult[1])
+			longMsg = "Additionally, the following error(s) occurred while processing the CSV's content:\n" + addResult[1]
+		elif replaceErrored:
+			shortMsg = "Unable to replace database from CSV file '{}'.".format(os.path.basename(csvPath))
+			longMsg = replaceResult[1]
+		elif addErrored:
+			shortMsg = "Successfully replaced database from CSV file '{}', but the following error(s) occurred while processing the CSV's content."
+			longMsg = addResult[1]
+		if not addErrored and not replaceErrored:
+			return cls()
+		return (shortMsg, longMsg)
 	
 	@classmethod
+	# Returns a tuple (shortMsg, longMsg) for error or its class if successful
 	def replaceFromSqlite(cls, sqlitePath):
+		print "replaceFromSqlite"
 		incomingDb = cls(dbPath = sqlitePath)
 		# Validate incoming schema against stored master (equivalent to validating against current database
 		# schema because that is validated against stored master at startup).
 		if not incomingDb.validateOwnSchema():
-			print "BAD: Incoming database schema invalid."
 			incomingDb.connection.close()
 			os.remove(sqlitePath)
-			return False
+			shortMsg = "Unable to replace database from file '{}'.".format(os.path.basename(sqlitePath))
+			longMsg = "Incoming database schema is invalid."
+			return (shortMsg, longMsg)
 		else:
 			# If the incoming database is valid, delete the old one and move the new one into its proper place
-			os.remove(cls.masterPath)
-			shutil.move(sqlitePath, cls.masterPath)
-			return cls()
+			try:
+				os.remove(cls.masterPath)
+				shutil.move(sqlitePath, cls.masterPath)
+				return cls()
+			except Exception as error:
+				shortMsg = "Unable to replace database from file '{}'.".format(os.path.basename(sqlitePath))
+				return (shortMsg, str(error))
 		
 	def addFromCsv(self, csvPath):
 		pass
+		# Subclasses should return their class for fully successful operations,
+		# or an error tuple for operations where some error(s) occurred
 		
 	def addFromSqlite(self, sqlitePath):
 		# Validate incoming schema against stored master (equivalent to validating against current database
 		# schema because that is validated against stored master at startup).
 		incomingDb = self.__class__(dbPath = sqlitePath)
 		if not incomingDb.validateOwnSchema():
-			print "BAD: Incoming database schema invalid."
 			incomingDb.connection.close()
 			try:
 				os.remove(sqlitePath)
 			except OSError:
 				pass # If the file does not exist, don't worry about it.
-			return False
+			return ("Unable to add data from SQLite file '{}'.".format(os.path.basename(sqlitePath)), "Incoming database schema invalid.")
 		else:
 			# If the incoming database is valid, walk through all its tables and add each row to the correspondnig table
 			# of the current database. Any duplicates between incoming and current db (or otherwise malformed rows)
 			# are ignored. Should be just duplicates in most cases, though, because schema has been validated to enforce
 			# other proper behavior.
-			incomingDb.connection.close()
-			self.connection.execute("ATTACH '{}' AS incomingDb;".format(sqlitePath))
-			for (thisTable,) in self.connection.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"):
-				self.connection.execute("INSERT OR IGNORE INTO {} SELECT * FROM incomingDb.{};".format(thisTable, thisTable))
-			self.connection.execute("DETACH incomingDb;")
-			self.connection.commit()
+			try:
+				incomingDb.connection.close()
+				self.connection.execute("ATTACH '{}' AS incomingDb;".format(sqlitePath))
+				for (thisTable,) in self.connection.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"):
+					self.connection.execute("INSERT OR IGNORE INTO {} SELECT * FROM incomingDb.{};".format(thisTable, thisTable))
+				self.connection.execute("DETACH incomingDb;")
+				self.connection.commit()
+			except Exception as error:
+				return ("Unable to add data from SQLite file '{}'.".format(os.path.basename(sqlitePath)), str(error))
+				
+			return self.__class__
 	
 	# Dump a CSV copy of a results list, identified by hash, into a temporary folder.
 	# CSV files are later served via the /export-results/ endpoint.
@@ -502,67 +566,76 @@ class SessionsDatabaseManager(DatabaseManager):
 		
 		# 	Loop through CSV rows and import each one
 		
+		errs = []
+		
 		for csvRow in csvReader:
 			
-			# Writing assistant sessions are pretty different, so just handle the two cases separately.
-			# `attendees` has some content for WA sessions, even if it's just "[]", but it's blank on center sessions
-			# [TODO ngreenstein] Verify above. Showing no recent WA sessions except during 17S and 15S.
-			if len(csvRow.get("attendees")) > 0:
+			try:
+			
+				# Writing assistant sessions are pretty different, so just handle the two cases separately.
+				# `attendees` has some content for WA sessions, even if it's just "[]", but it's blank on center sessions
+				# [TODO ngreenstein] Verify above. Showing no recent WA sessions except during 17S and 15S.
+				if len(csvRow.get("attendees")) > 0:
 				
-				waSessionVals = valuesDictFromBindingsAndCsvRow(waSessionBindings, csvRow)
-				reorderTermNameInDict(waSessionVals)
-				# For WA sessions, the info in the client fields actually describes the tutor,
-				# so treat tutors as real people instead of stubs.
-				tutorVals = valuesDictFromBindingsAndCsvRow(clientBindings, csvRow)
-				# Store the tutor info
-				self.connection.execute(clientInsertQuery, tutorVals)
-				# Find the matching tutor's id (can't just use `lastrowid` because duplicate people are ignored, not inserted)
-				tutorId = self.connection.execute(clientFindQuery, (tutorVals.get("name"), tutorVals.get("deptClass"))).fetchone()[0]
-				# Fill in the session's tutorId fkey
-				waSessionVals["tutorId"] = tutorId
-				# Store the session info
-				self.connection.execute(waSessionInsertQuery, waSessionVals)
+					waSessionVals = valuesDictFromBindingsAndCsvRow(waSessionBindings, csvRow)
+					reorderTermNameInDict(waSessionVals)
+					# For WA sessions, the info in the client fields actually describes the tutor,
+					# so treat tutors as real people instead of stubs.
+					tutorVals = valuesDictFromBindingsAndCsvRow(clientBindings, csvRow)
+					# Store the tutor info
+					self.connection.execute(clientInsertQuery, tutorVals)
+					# Find the matching tutor's id (can't just use `lastrowid` because duplicate people are ignored, not inserted)
+					tutorId = self.connection.execute(clientFindQuery, (tutorVals.get("name"), tutorVals.get("deptClass"))).fetchone()[0]
+					# Fill in the session's tutorId fkey
+					waSessionVals["tutorId"] = tutorId
+					# Store the session info
+					self.connection.execute(waSessionInsertQuery, waSessionVals)
+					
+				else:
+					
+					# Assemble basic values from bindings/CSV row
+					centerSessionVals = valuesDictFromBindingsAndCsvRow(centerSessionBindings, csvRow)
+					reorderTermNameInDict(centerSessionVals)
+					clientVals = valuesDictFromBindingsAndCsvRow(clientBindings, csvRow)
+					tutorName = csvRow.get("tutor_name")
+					clientRecordVals = valuesDictFromBindingsAndCsvRow(clientRecordBindings, csvRow)
+					tutorRecordVals = valuesDictFromBindingsAndCsvRow(tutorRecordBindings, csvRow)
+					
+					# Store the client info and tutor stub, then grab ids
+					self.connection.execute(clientInsertQuery, clientVals)
+					clientId = self.connection.execute(clientFindQuery, (clientVals.get("name"), clientVals.get("deptClass"))).fetchone()[0]
+					centerSessionVals["clientId"] = clientId
+					tutorStubId = -1
+					if len(tutorName) > 0: # Cancelled center sessions have no tutor
+						self.connection.execute(tutorStubInsertQuery, (tutorName,))
+						tutorStubId = self.connection.execute(tutorStubFindQuery, (tutorName,)).fetchone()[0]
+						centerSessionVals["tutorId"] = tutorStubId
+					
+					# It's possible for client and tutor records to be incomplete. Store them if at least one field has a value;
+					# discard if everything is blank.
+					if dictHasSomeValue(clientRecordVals):
+						clientRecordVals["clientId"] = clientId
+						clientRecordId = self.connection.execute(clientRecordInsertQuery, clientRecordVals).lastrowid
+						centerSessionVals["clientRecordId"] = clientRecordId
+					if dictHasSomeValue(tutorRecordVals):
+						if tutorStubId >= 0:
+							tutorRecordVals["tutorId"] = tutorStubId
+						tutorRecordId = self.connection.execute(tutorRecordInsertQuery, tutorRecordVals).lastrowid
+						centerSessionVals["tutorRecordId"] = tutorRecordId
+					
+					# Store the session info
+					self.connection.execute(centerSessionInsertQuery, centerSessionVals)
 				
-			else:
-				
-				# Assemble basic values from bindings/CSV row
-				centerSessionVals = valuesDictFromBindingsAndCsvRow(centerSessionBindings, csvRow)
-				reorderTermNameInDict(centerSessionVals)
-				clientVals = valuesDictFromBindingsAndCsvRow(clientBindings, csvRow)
-				tutorName = csvRow.get("tutor_name")
-				clientRecordVals = valuesDictFromBindingsAndCsvRow(clientRecordBindings, csvRow)
-				tutorRecordVals = valuesDictFromBindingsAndCsvRow(tutorRecordBindings, csvRow)
-				
-				# Store the client info and tutor stub, then grab ids
-				self.connection.execute(clientInsertQuery, clientVals)
-				clientId = self.connection.execute(clientFindQuery, (clientVals.get("name"), clientVals.get("deptClass"))).fetchone()[0]
-				centerSessionVals["clientId"] = clientId
-				tutorStubId = -1
-				if len(tutorName) > 0: # Cancelled center sessions have no tutor
-					self.connection.execute(tutorStubInsertQuery, (tutorName,))
-					tutorStubId = self.connection.execute(tutorStubFindQuery, (tutorName,)).fetchone()[0]
-					centerSessionVals["tutorId"] = tutorStubId
-				
-				# It's possible for client and tutor records to be incomplete. Store them if at least one field has a value;
-				# discard if everything is blank.
-				if dictHasSomeValue(clientRecordVals):
-					clientRecordVals["clientId"] = clientId
-					clientRecordId = self.connection.execute(clientRecordInsertQuery, clientRecordVals).lastrowid
-					centerSessionVals["clientRecordId"] = clientRecordId
-				if dictHasSomeValue(tutorRecordVals):
-					if tutorStubId >= 0:
-						tutorRecordVals["tutorId"] = tutorStubId
-					tutorRecordId = self.connection.execute(tutorRecordInsertQuery, tutorRecordVals).lastrowid
-					centerSessionVals["tutorRecordId"] = tutorRecordId
-				
-				# Store the session info
-				self.connection.execute(centerSessionInsertQuery, centerSessionVals)
+			except Exception as error:
+				errs.append(str(error))
 		
-		# Cleanup
 		self.connection.commit()
 		csvFile.close()
 		
-		return self
+		if len(errs) > 0:
+			return ("An error occured while adding data from CSV file '{}'.".format(os.path.basename(csvPath)), "\n".join(errs))
+		
+		return self.__class__
 	
 class EnoDatabaseManager(DatabaseManager):
 	"""Keeps track of education & outreach database connections and provides convenience methods for interacting with them"""
@@ -597,23 +670,20 @@ class SavedQuery(object):
 		return "SavedQuery '{}' ({} parameters)".format(self.name, len(self.parameters))
 		
 	def validateParamValues(self):
-		valid = True
+		errors = []
 		for param in self.parameters:
 			val = param.values
 			if len(val) == 0 and param.required == True:
-				print "Invalid parameter values: no value specified for required parameter {}".format(param.name)
-				valid = False
+				errors.append("No value specified for required parameter '{}'".format(param.name))
 			if param.paramType == "select":
 				for thisVal in val:
 					if not thisVal in param.options:
-							print "Invalid parameter values: invalid selection '{}' for parameter {}".format(thisVal, param.name)
-							valid = False
+							errors.append("Invalid selection '{}' for parameter '{}'".format(thisVal, param.name))
 			if param.paramType == "bool":
 				for thisVal in val:
 					if thisVal not in ["Yes", "No"]:
-						print "Invalid parameter values: invalid value '{}' for boolean parameter {}".format(thisVal, param.name)
-						valid = False
-		return valid
+						errors.append("Invalid value '{}' for boolean parameter '{}'".format(thisVal, param.name))
+		return errors
 	
 	# Rewrite queries to have the proper number of placeholders. Allows for selection of multiple values.
 	def prepQuery(self):
@@ -747,7 +817,7 @@ if not "sessions.db" in dbFiles:
 		openFile.close()
 		sessionsDb.executeScript(script)
 	except Exception as error:
-		print "An error occurred creating the sessions database: {}".format(error)
+		startupError = ("An error occurred creating the Sessions database.", error)
 		
 if not "eno.db" in dbFiles:
 	try:
@@ -756,19 +826,19 @@ if not "eno.db" in dbFiles:
 		openFile.close()
 		enoDb.executeScript(script)
 	except Exception as error:
-		print "An error occurred creating the education & outreach database: {}".format(error)
+		startupError = ("An error occurred creating the Education & Outreach database.", error)
 
 try:
 	if not sessionsDb.validateOwnSchema():
-		print "Error: sessions database schema is invalid"
+		startupError = ("The Sessions database schema is invalid.",)
 except Exception as error:
-	print "An error occurred validating the sessions database schema: {}".format(error)
+	startupError = ("An error occurred validating the Sessions database schema.", error)
 
 try:
 	if not enoDb.validateOwnSchema():
-		print "Error: education & outreach database schema is invalid"
+		startupError = ("The Education & Outreach database schema is invalid.",)
 except Exception as error:
-	print "An error occurred validating the education and outreach database schema: {}".format(error)
+	startupError = ("An error occurred validating the Education & Outreach database schema.", error)
 
 if not DEBUG:
 	welcomeString = "\n\n"
