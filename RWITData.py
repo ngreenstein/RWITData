@@ -246,8 +246,8 @@ def imp(dataset):
 		shortMsg = "Unable to complete import."
 		return template(makePath("app/templates/error.tpl"), basePath = basePath, shortMessage = shortMsg, longMessage = str(error))
 	
-	return "<p>Import {} data from {} in {} mode</p>".format(dataset, importFile.filename, mode)
-	# todo show some pretty success message instead of this^
+	successAlert = ("Successfully {} data from '{}'.".format("added" if mode == "add" else "replaced", importFile.filename), "success")
+	return template(makePath("app/templates/admin.tpl/"), basePath = basePath, dataset = dataset, datasetName = datasetNames.get(dataset), alerts = [successAlert])
 	
 @bottleApp.route("/about/")
 def about():
@@ -340,9 +340,10 @@ class DatabaseManager(object):
 		
 	def addFromCsv(self, csvPath):
 		pass
-		# Subclasses should return their class for fully successful operations,
+		# Subclasses should return themselves for fully successful operations,
 		# or an error tuple for operations where some error(s) occurred
-		
+	
+	# Returns itself if successful or an error tuple if not
 	def addFromSqlite(self, sqlitePath):
 		# Validate incoming schema against stored master (equivalent to validating against current database
 		# schema because that is validated against stored master at startup).
@@ -369,7 +370,7 @@ class DatabaseManager(object):
 			except Exception as error:
 				return ("Unable to add data from SQLite file '{}'.".format(os.path.basename(sqlitePath)), str(error))
 				
-			return self.__class__
+			return self
 	
 	# Dump a CSV copy of a results list, identified by hash, into a temporary folder.
 	# CSV files are later served via the /export-results/ endpoint.
@@ -639,7 +640,7 @@ class SessionsDatabaseManager(DatabaseManager):
 		if len(errs) > 0:
 			return ("An error occured while adding data from CSV file '{}'.".format(os.path.basename(csvPath)), "\n".join(errs))
 		
-		return self.__class__
+		return self
 	
 class EnoDatabaseManager(DatabaseManager):
 	"""Keeps track of education & outreach database connections and provides convenience methods for interacting with them"""

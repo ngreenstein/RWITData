@@ -44,8 +44,7 @@
 	<div class="container">
 		
 		<%
-		setdefault("alerts", [])
-		if len(alerts) > 0 or (defined("errors") and len(errors) > 0):
+		if (defined("alerts") and alerts and len(alerts) > 0) or (defined("errors") and len(errors) > 0):
 			if defined("errors") and len(errors) > 0:
 				errTuples = []
 				for err in errors:
@@ -58,8 +57,10 @@
 					end
 					errTuples.append((errHtml, "danger"))
 				end
-				# These two lines effectively add the errors to the beginning of the list of alerts
-				errTuples.extend(alerts)
+				# This effectively adds the errors to the beginning of the list of alerts (if any exist)
+				if defined("alerts"):
+					errTuples.extend(alerts)
+				end
 				alerts = errTuples
 			end
 		

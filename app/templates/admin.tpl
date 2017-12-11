@@ -1,6 +1,6 @@
 <%
 pageTitle = datasetName + " Admin"
-include(basePath + "app/templates/header.tpl", title=pageTitle)
+include(basePath + "app/templates/header.tpl", title = pageTitle, alerts = get("alerts", None))
 %>
 
 <h1>{{datasetName}} Admin</h1>
