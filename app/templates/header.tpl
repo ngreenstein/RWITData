@@ -42,3 +42,39 @@
 	</nav>
 	
 	<div class="container">
+		
+		<%
+		setdefault("alerts", [])
+		if len(alerts) > 0 or (defined("errors") and len(errors) > 0):
+			if defined("errors") and len(errors) > 0:
+				errTuples = []
+				for err in errors:
+					if not err:
+						break
+					end
+					errHtml = err[0]
+					if len(err) > 1:
+						errHtml += "\n<p>Additional information:</p>\n<code>{}</code>".format(err[1])
+					end
+					errTuples.append((errHtml, "danger"))
+				end
+				# These two lines effectively add the errors to the beginning of the list of alerts
+				errTuples.extend(alerts)
+				alerts = errTuples
+			end
+		
+			for alert in alerts:
+				if not isinstance(alert, tuple): # Not a tuple, just a string
+					alert = (alert, "info")
+				elif len(alert) < 2: # A tuple with no type specified
+					alert = (alert[0], "info")
+				end
+				%>
+		
+		<div class="alert alert-{{alert[1]}} alert-dismissible" role="alert">
+			<button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+			{{!alert[0]}}
+		</div>
+		
+		% 	end
+		% end

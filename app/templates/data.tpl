@@ -1,6 +1,6 @@
 <%
 pageTitle = datasetName + " Data"
-include(basePath + "app/templates/header.tpl", title=pageTitle)
+include(basePath + "app/templates/header.tpl", title = pageTitle, errors = get("errors", None))
 %>
 
 <h1>{{datasetName}} Data</h1>

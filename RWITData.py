@@ -35,23 +35,28 @@ bottleApp = Bottle()
 def index():
 	# If an error occured during startup, show it the fist time the homepage is loaded.
 	global startupError
+	alert = None
 	if startupError[0]:
 		shortMsg = startupError[0]
+		alert = ("<p><strong>Error starting RWITData:</strong> '{}'.</p>".format(shortMsg),)
 		longMsg = None
-		if len(startupError) > 1: longMsg = str(startupError[1])
+		if len(startupError) > 1:
+			longMsg = str(startupError[1])
+			alert = (alert[0], longMsg)
 		startupError = (None, None)
-		return template(makePath("app/templates/error.tpl"), basePath = basePath, shortMessage = shortMsg, longMessage = longMsg)
-	else:
-		return template(makePath("app/templates/index.tpl"), basePath = basePath)
+	return template(makePath("app/templates/index.tpl"), basePath = basePath, errors = [alert])
 	
 @bottleApp.route("/data/<dataset:re:sessions|eno>/")
 def data(dataset):
-	return template(makePath("app/templates/data.tpl/"), basePath = basePath, dataset=dataset, datasetName=datasetNames.get(dataset), savedQueries=SavedQuery.loadAllForDataset(dataset))
+	results = SavedQuery.loadAllForDataset(dataset)
+	queries = results[0]
+	errors = results[1]
+	return template(makePath("app/templates/data.tpl"), basePath = basePath, dataset=dataset, datasetName=datasetNames.get(dataset), savedQueries=queries, errors = errors)
 	
 @bottleApp.post("/data/<dataset:re:sessions|eno>/saved-query/")
 def savedQuery(dataset):
 	hashVal = int(request.forms.get("hash"))
-	savedQueries = SavedQuery.loadAllForDataset(dataset)
+	savedQueries = SavedQuery.loadAllForDataset(dataset)[0]
 	matchedQueries = [query for query in savedQueries if query.hash == hashVal]
 	if len(matchedQueries) > 0:
 		thisQuery = matchedQueries[0]
@@ -314,7 +319,6 @@ class DatabaseManager(object):
 	@classmethod
 	# Returns a tuple (shortMsg, longMsg) for error or its class if successful
 	def replaceFromSqlite(cls, sqlitePath):
-		print "replaceFromSqlite"
 		incomingDb = cls(dbPath = sqlitePath)
 		# Validate incoming schema against stored master (equivalent to validating against current database
 		# schema because that is validated against stored master at startup).
@@ -710,13 +714,13 @@ class SavedQuery(object):
 		return flat
 
 	@classmethod
+	# Returns a SavedQuery if successful or an error tuple if not
 	def initFromJsonString(self, jsonString):
 		try:
 			# `loads` puts everything in unicode; hence various str() casts below
 			parsedJson = json.loads(jsonString)
-		except:
-			print "Error loading saved query: couldn't parse json"
-			return None
+		except Exception as error:
+			return  ("Failed to load saved query: error parsing JSON.", str(error))
 		name = str(parsedJson.get("name", ""))
 		description = str(parsedJson.get("description", ""))
 		query = str(parsedJson.get("query", ""))
@@ -726,18 +730,19 @@ class SavedQuery(object):
 			paramObj = SavedQuery.Parameter.initFromJsonDict(thisParam)
 			params.append(paramObj)
 		if name == "" or query == "":
-			print "Error loading saved query '{}': name and query are required".format(name)
-			return None
+			return ("Failed to load saved query '{}': 'name' and 'query' parameters are required.".format(name),)
 		if len(params) != query.count("?"):
-			print "Error loading saved query '{}': number of parameters ({}) must match number of placeholders in query ({})".format(name, len(params), query.count("?"))
-			return None
+			return("Failed to load saved query '{}': number of parameters ({}) must match number of placeholders in query string ({}).".format(name, len(params), query.count("?")),)
 		return SavedQuery(name=name, description=description, query=query, parameters=params)
 		
 	@staticmethod
+	# Returns a tuple where the first element is a list of successfully loaded queries,
+	# and the second element is a list of errors.
 	def loadAllForDataset(dataset):
 		basePath = makePath("app/saved-queries/") + dataset + "/"
 		filesList = listdir(basePath)
 		parsedQueries = []
+		errors = []
 		for thisFile in filesList:
 			if thisFile.endswith(".json"):
 				openFile = open(basePath + thisFile, "r")
@@ -745,14 +750,16 @@ class SavedQuery(object):
 				openFile.close()
 				thisQuery = SavedQuery.initFromJsonString(jsonString)
 				# Make sure the query was parsed successfully and is different from others in the list
-				if thisQuery:
+				if isinstance(thisQuery, SavedQuery):
 					identicalQueries = [query for query in parsedQueries if int(query.hash) == int(thisQuery.hash)]
 					if len(identicalQueries) < 1:
 						parsedQueries.append(thisQuery)
 					else:
-						print "Error loading saved query '{}': identical query already loaded under name '{}'".format(thisQuery.name, identicalQueries[0].name)
+						errors.append(("Error loading saved query '{}': identical query already loaded under name '{}'".format(thisQuery.name, identicalQueries[0].name),))
+				elif isinstance(thisQuery, tuple):
+					errors.append(thisQuery)
 		parsedQueries = sorted(parsedQueries, key=lambda k: k.name) # Alphabetize the list
-		return parsedQueries
+		return (parsedQueries, errors)
 		
 	class Parameter(object):
 		"""A parameter for a prepared database query"""
