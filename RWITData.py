@@ -429,6 +429,10 @@ class SessionsDatabaseManager(DatabaseManager):
 		pass
 		# maybe do as db trigger instead?
 	
+	# TODO De-duplication. Don't let add imports create duplicate entries if, e.g.,
+	# 15F thru 16F is already in the db and someone and someone adds 16F thru 17F.
+	# Is there a reason we aren't using RWIT Online's `session_id` for pkey and uniquing
+	# that way? If there aren't problems with that, it might get us most of the way there.
 	def addFromCsv(self, csvPath):
 		
 		# Read the CSV file
@@ -459,7 +463,7 @@ class SessionsDatabaseManager(DatabaseManager):
 						pass
 					return True
 			return False
-		# Reorder term names from RWIT Online (e.g. "X17" -> "17X")
+		# 	Reorder term names from RWIT Online (e.g. "X17" -> "17X")
 		def reorderTermNameInDict(dict, key = "term"):
 			originalTerm = dict.get(key)
 			regex = re.search(r"(F|W|S|X)(\d{2})", originalTerm)
@@ -468,6 +472,13 @@ class SessionsDatabaseManager(DatabaseManager):
 				year = regex.group(2)
 				reorderedTerm = year + quarter
 				dict[key] = reorderedTerm
+		# 	Replace textual values with a corresponding quantitative value based on position in a list
+		#	e.g. "No" -> 1, "Maybe" -> 2, "Yes" -> 3 for ("No", "Maybe", "Yes")
+		def replaceQualitativeWithQuantitativeByPosition(dict, keys, positions):
+			for key in keys:
+				qualVal = dict.get(key)
+				if qualVal and qualVal in positions:
+					dict[key] = positions.index(qualVal) + 1
 		
 		# Do the actual import legwork
 		
@@ -549,6 +560,9 @@ class SessionsDatabaseManager(DatabaseManager):
 		clientRecordCols = colStringFromBindings(clientRecordBindings)
 		clientRecordPlaceholders = placeholderStringFromBindings(clientRecordBindings)
 		clientRecordInsertQuery = "INSERT INTO clientRecords({}) VALUES ({});".format(clientRecordCols, clientRecordPlaceholders)
+		clientRecordAgreeQual = ("Strongly Disagree", "Disagree", "Agree", "Strongly Agree")
+		clientRecordAmountQual = ("Nothing", "Little", "Some", "A Lot")
+		clientRecordPlanQual = ("No", "Maybe", "Yes")
 		tutorRecordBindings = [(None, "tutorId"),
 								("primary_document_type", "primaryDocumentType"),
 								("other_primary_document_type", "otherPrimaryDocumentType"),
@@ -619,6 +633,9 @@ class SessionsDatabaseManager(DatabaseManager):
 					# It's possible for client and tutor records to be incomplete. Store them if at least one field has a value;
 					# discard if everything is blank.
 					if dictHasSomeValue(clientRecordVals):
+						replaceQualitativeWithQuantitativeByPosition(clientRecordVals, ("useful", "appropriate"), clientRecordAgreeQual)
+						replaceQualitativeWithQuantitativeByPosition(clientRecordVals, ("learned",), clientRecordAmountQual)
+						replaceQualitativeWithQuantitativeByPosition(clientRecordVals, ("again", "recommend"), clientRecordPlanQual)
 						clientRecordVals["clientId"] = clientId
 						clientRecordId = self.connection.execute(clientRecordInsertQuery, clientRecordVals).lastrowid
 						centerSessionVals["clientRecordId"] = clientRecordId

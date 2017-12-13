@@ -1,0 +1,5 @@
+{
+	"name": "Quantitative Client Feedback Report",
+	"description": "Averages quantifiable client feedback received for each tutor.",
+	"query": "SELECT tutorStubs.name AS 'Name', COUNT() AS '# Records', AVG(useful) AS 'Avg Useful', AVG(appropriate) AS 'Avg Approprite', AVG(learned) AS 'Avg Learned', AVG(again)  AS 'Avg Again', AVG(recommend) AS 'Avg Recommend' FROM clientRecords INNER JOIN centerSessions ON clientRecords.id = centerSessions.clientRecordId INNER JOIN tutorStubs ON centerSessions.tutorId = tutorStubs.id WHERE clientRecordId NOT NULL GROUP BY tutorId ORDER BY name ASC;"
+}

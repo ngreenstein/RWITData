@@ -85,9 +85,9 @@ CREATE TABLE "clientRecords" (
 	"localGoalsMet" TEXT,
 	"feedback" TEXT,
 	"suggestions" TEXT,
-	"useful" TEXT,
-	"appropriate" TEXT,
-	"learned" TEXT,
-	"again" TEXT,
-	"recommend" TEXT
+	"useful" INTEGER,
+	"appropriate" INTEGER,
+	"learned" INTEGER,
+	"again" INTEGER,
+	"recommend" INTEGER
 );

@@ -1,0 +1,11 @@
+{
+	"name": "Client Feedback by Tutor IDs",
+	"description": "Finds all client feedback given to specific tutors, as identified by IDs.",
+	"query": "SELECT tutorId as 'Tutor ID', tutorStubs.name as 'Tutor Name', centerSessions.id as 'Session ID', people.name as 'Client Name', feedback as 'Feedback', suggestions as 'Suggestions', useful AS 'Useful', appropriate AS 'Approprite', learned AS 'Learned', again AS 'Again', recommend AS 'Recommend' FROM clientRecords INNER JOIN centerSessions ON clientRecords.id = centerSessions.clientRecordId INNER JOIN tutorStubs ON centerSessions.tutorId = tutorStubs.id INNER JOIN people ON centerSessions.clientId = people.id WHERE clientRecordId NOT NULL AND tutorId IN (?) ORDER BY tutorId ASC, centerSessions.id ASC;",
+	"parameters": [{
+						"name": "Tutor IDs",
+						"type": "text",
+						"required": true,
+						"allowMulti": true
+					}]
+}
