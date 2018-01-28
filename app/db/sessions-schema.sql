@@ -1,7 +1,7 @@
 CREATE TABLE "centerSessions" (
 	"id" INTEGER PRIMARY KEY NOT NULL UNIQUE,
-	"clientId" INTEGER REFERENCES "people.id"(""),
-	"tutorId" INTEGER REFERENCES "tutorStubs.id"(""),
+	"clientId" TEXT REFERENCES "people.netId"(""),
+	"tutorId" TEXT REFERENCES "people.netId"(""),
 	"type" TEXT,
 	"term" TEXT,
 	"startTime" TEXT,
@@ -15,8 +15,7 @@ CREATE TABLE "centerSessions" (
 
 CREATE TABLE "writingAssistantSessions" (
 	"id" INTEGER PRIMARY KEY UNIQUE NOT NULL,
-	/* WA sessions have real tutor data, so use `people` instead of `tutorStubs` */
-	"tutorId" INTEGER REFERENCES "people.id"(""),
+	"tutorId" TEXT REFERENCES "people.netId"(""),
 	"type" TEXT,
 	"term" TEXT,
 	"date" TEXT,
@@ -31,7 +30,7 @@ CREATE TABLE "writingAssistantSessions" (
 );
 
 CREATE TABLE "people" (
-	"id" INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE NOT NULL,
+	"netId" TEXT PRIMARY KEY UNIQUE NOT NULL,
 	"name" TEXT,
 	"status" TEXT,
 	"deptClass" TEXT,
@@ -43,24 +42,12 @@ CREATE TABLE "people" (
 	"firstLanguage" TEXT,
 	"fluentSpeaking" TEXT,
 	"fluentReading" TEXT,
-	"fluentWriting" TEXT,
-	UNIQUE ("name", "deptClass")
-);
-
-/*
-* Currently (17X), RWIT Online doesn't give any tutor info beyond name. Better info
-* (and a better way to unique people in general) is theoretically coming soon, at which point
-* tutors should be put into the `people` table with clients, and any `tutorId` column can
-* reference `people(id)` instead of `tutorStubs(id)`.
-*/
-CREATE TABLE "tutorStubs" (
-	"id" INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE NOT NULL,
-	"name" TEXT UNIQUE NOT NULL
+	"fluentWriting" TEXT
 );
 
 CREATE TABLE "tutorRecords" (
 	"id" INTEGER PRIMARY KEY AUTOINCREMENT UNIQUE NOT NULL,
-	"tutorId" INTEGER REFERENCES "tutorStubs.id"(""),
+	"tutorId" TEXT REFERENCES "people.netId"(""),
 	"primaryDocumentType" TEXT,
 	"otherPrimaryDocumentType" TEXT,
 	"dueDate" TEXT,
@@ -80,7 +67,7 @@ CREATE TABLE "tutorRecords" (
 
 CREATE TABLE "clientRecords" (
 	"id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL UNIQUE,
-	"clientId" INTEGER REFERENCES "people.id"(""),
+	"clientId" TEXT REFERENCES "people.netId"(""),
 	"globalGoalsMet" TEXT,
 	"localGoalsMet" TEXT,
 	"feedback" TEXT,

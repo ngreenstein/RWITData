@@ -529,7 +529,8 @@ class SessionsDatabaseManager(DatabaseManager):
 		waSessionCols = colStringFromBindings(waSessionBindings)
 		waSessionPlaceholders = placeholderStringFromBindings(waSessionBindings)
 		waSessionInsertQuery = "INSERT INTO writingAssistantSessions({}) VALUES ({});".format(waSessionCols, waSessionPlaceholders)
-		clientBindings = [("client_name", "name"),
+		clientBindings = [("client_netid", "netId"),
+							("client_name", "name"),
 							("client_status", "status"),
 							("client_deptclass", "deptClass"),
 							("client_majors", "majors"),
@@ -543,10 +544,14 @@ class SessionsDatabaseManager(DatabaseManager):
 							("client_fluent_writing", "fluentWriting")]
 		clientCols = colStringFromBindings(clientBindings)
 		clientPlaceholders = placeholderStringFromBindings(clientBindings)
-		clientInsertQuery = "INSERT OR IGNORE INTO people({}) VALUES ({});".format(clientCols, clientPlaceholders)
-		clientFindQuery = "SELECT id FROM people WHERE name = ? and deptClass = ?;"
-		tutorStubInsertQuery = "INSERT OR IGNORE INTO tutorStubs('name') VALUES (?);"
-		tutorStubFindQuery = "SELECT id FROM tutorStubs WHERE name = ?;"
+		# Using `OR REPLACE` INSTEAD OF `OR IGNORE` means that new info on people is incorporated,
+		# and that stubby tutor entries can have their info fleshed out if that tutor has a session as a client.
+		clientInsertQuery = "INSERT OR REPLACE INTO people({}) VALUES ({});".format(clientCols, clientPlaceholders)
+		tutorBindings = [("tutor_netid", "netId"),
+							("tutor_name", "name")]
+		tutorCols = colStringFromBindings(tutorBindings)
+		tutorPlaceholders = placeholderStringFromBindings(tutorBindings)
+		tutorInsertQuery = "INSERT OR IGNORE INTO people({}) VALUES ({});".format(tutorCols, tutorPlaceholders)
 		clientRecordBindings = [(None, "clientId"),
 								 ("client_global_goal_mets", "globalGoalsMet"),
 								 ("client_local_goal_mets", "localGoalsMet"),
@@ -593,20 +598,16 @@ class SessionsDatabaseManager(DatabaseManager):
 			
 				# Writing assistant sessions are pretty different, so just handle the two cases separately.
 				# `attendees` has some content for WA sessions, even if it's just "[]", but it's blank on center sessions
-				# [TODO ngreenstein] Verify above. Showing no recent WA sessions except during 17S and 15S.
 				if len(csvRow.get("attendees")) > 0:
 				
 					waSessionVals = valuesDictFromBindingsAndCsvRow(waSessionBindings, csvRow)
 					reorderTermNameInDict(waSessionVals)
-					# For WA sessions, the info in the client fields actually describes the tutor,
-					# so treat tutors as real people instead of stubs.
+					# For WA sessions, the info in the client fields actually describes the tutor.
 					tutorVals = valuesDictFromBindingsAndCsvRow(clientBindings, csvRow)
 					# Store the tutor info
 					self.connection.execute(clientInsertQuery, tutorVals)
-					# Find the matching tutor's id (can't just use `lastrowid` because duplicate people are ignored, not inserted)
-					tutorId = self.connection.execute(clientFindQuery, (tutorVals.get("name"), tutorVals.get("deptClass"))).fetchone()[0]
 					# Fill in the session's tutorId fkey
-					waSessionVals["tutorId"] = tutorId
+					waSessionVals["tutorId"] = tutorVals["netId"]
 					# Store the session info
 					self.connection.execute(waSessionInsertQuery, waSessionVals)
 					
@@ -616,19 +617,17 @@ class SessionsDatabaseManager(DatabaseManager):
 					centerSessionVals = valuesDictFromBindingsAndCsvRow(centerSessionBindings, csvRow)
 					reorderTermNameInDict(centerSessionVals)
 					clientVals = valuesDictFromBindingsAndCsvRow(clientBindings, csvRow)
-					tutorName = csvRow.get("tutor_name")
+					tutorVals = valuesDictFromBindingsAndCsvRow(tutorBindings, csvRow)
 					clientRecordVals = valuesDictFromBindingsAndCsvRow(clientRecordBindings, csvRow)
 					tutorRecordVals = valuesDictFromBindingsAndCsvRow(tutorRecordBindings, csvRow)
 					
-					# Store the client info and tutor stub, then grab ids
+					# Store the client and tutor info, and set netId fkeys
 					self.connection.execute(clientInsertQuery, clientVals)
-					clientId = self.connection.execute(clientFindQuery, (clientVals.get("name"), clientVals.get("deptClass"))).fetchone()[0]
-					centerSessionVals["clientId"] = clientId
-					tutorStubId = -1
-					if len(tutorName) > 0: # Cancelled center sessions have no tutor
-						self.connection.execute(tutorStubInsertQuery, (tutorName,))
-						tutorStubId = self.connection.execute(tutorStubFindQuery, (tutorName,)).fetchone()[0]
-						centerSessionVals["tutorId"] = tutorStubId
+					self.connection.execute(tutorInsertQuery, tutorVals)
+					centerSessionVals["clientId"] = clientVals["netId"]
+					if len(tutorVals["name"]) > 0: # Cancelled center sessions have no tutor
+						self.connection.execute(tutorInsertQuery, tutorVals)
+						centerSessionVals["tutorId"] = tutorVals["netId"]
 					
 					# It's possible for client and tutor records to be incomplete. Store them if at least one field has a value;
 					# discard if everything is blank.
@@ -636,12 +635,11 @@ class SessionsDatabaseManager(DatabaseManager):
 						replaceQualitativeWithQuantitativeByPosition(clientRecordVals, ("useful", "appropriate"), clientRecordAgreeQual)
 						replaceQualitativeWithQuantitativeByPosition(clientRecordVals, ("learned",), clientRecordAmountQual)
 						replaceQualitativeWithQuantitativeByPosition(clientRecordVals, ("again", "recommend"), clientRecordPlanQual)
-						clientRecordVals["clientId"] = clientId
+						clientRecordVals["clientId"] = clientVals["netId"]
 						clientRecordId = self.connection.execute(clientRecordInsertQuery, clientRecordVals).lastrowid
 						centerSessionVals["clientRecordId"] = clientRecordId
 					if dictHasSomeValue(tutorRecordVals):
-						if tutorStubId >= 0:
-							tutorRecordVals["tutorId"] = tutorStubId
+						tutorRecordVals["tutorId"] = tutorVals["netId"]
 						tutorRecordId = self.connection.execute(tutorRecordInsertQuery, tutorRecordVals).lastrowid
 						centerSessionVals["tutorRecordId"] = tutorRecordId
 					
