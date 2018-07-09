@@ -6,6 +6,8 @@ CREATE TABLE "centerSessions" (
 	"term" TEXT,
 	"startTime" TEXT,
 	"stopTime" TEXT,
+	"weekDay" TEXT,
+	"timeSlot" INTEGER,
 	"creationTime" TEXT,
 	"updateTime" TEXT,
 	"state" TEXT,
