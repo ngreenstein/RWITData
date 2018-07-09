@@ -13,6 +13,7 @@ enoDb = None
 
 from app.lib.bottle import Bottle, run, template, static_file, request, redirect
 from shutil import copyfile
+from datetime import datetime
 import os, tempfile, sys, csv
 
 FROZEN = getattr(sys, "frozen", False)
@@ -472,6 +473,34 @@ class SessionsDatabaseManager(DatabaseManager):
 				year = regex.group(2)
 				reorderedTerm = year + quarter
 				dict[key] = reorderedTerm
+		# Compute time slot from start time
+		def computeTimeSlotInDict(dict, startKey = "startTime", stopKey = "stopTime", slotKey = "timeSlot"):
+			# Rules: 	Consider sessions >= 100 mins long as left running; do not slot
+			#			If a session begins after the 50-min mark of an hour, slot as whatever hour it exists in most
+			# 			Otherwise, use hour of start time
+			if dict.get(startKey) and dict.get(stopKey):
+				timeFormat = "%m/%d/%Y %H:%M"
+				try:
+					startTime = datetime.strptime(dict[startKey], timeFormat)
+					stopTime = datetime.strptime(dict[stopKey], timeFormat)
+				except ValueError:
+					return False # Couldn't parse times
+				duration = stopTime - startTime
+				duration = duration.total_seconds() / 60
+				slot = None
+				if duration >= 100:
+					return False # >= 100 mins long
+				elif startTime.minute >= 50:
+					if not stopTime.hour > startTime.hour:
+						slot = startTime.hour
+					else:
+						timeFirstHour = 60 - startTime.minute
+						# If at least half the session occurred in the first hour, use that. Otherwise use next hour
+						slot = startTime.hour if timeFirstHour >= (duration / 2) else startTime.hour + 1
+				else:
+					slot = startTime.hour # Normal session; not too long and started before 50-min mark. Use start hour
+				if slot:
+					dict[slotKey] = slot
 		# 	Replace textual values with a corresponding quantitative value based on position in a list
 		#	e.g. "No" -> 1, "Maybe" -> 2, "Yes" -> 3 for ("No", "Maybe", "Yes")
 		def replaceQualitativeWithQuantitativeByPosition(dict, keys, positions):
@@ -506,6 +535,7 @@ class SessionsDatabaseManager(DatabaseManager):
 								   ("term", "term"),
 								   ("start_time", "startTime"),
 								   ("stop_time", "stopTime"),
+								   (None, "timeSlot"),
 								   ("session_created_at", "creationTime"),
 								   ("session_updated_at", "updateTime"),
 								   ("state", "state"),
@@ -616,6 +646,7 @@ class SessionsDatabaseManager(DatabaseManager):
 					# Assemble basic values from bindings/CSV row
 					centerSessionVals = valuesDictFromBindingsAndCsvRow(centerSessionBindings, csvRow)
 					reorderTermNameInDict(centerSessionVals)
+					computeTimeSlotInDict(centerSessionVals)
 					clientVals = valuesDictFromBindingsAndCsvRow(clientBindings, csvRow)
 					tutorVals = valuesDictFromBindingsAndCsvRow(tutorBindings, csvRow)
 					clientRecordVals = valuesDictFromBindingsAndCsvRow(clientRecordBindings, csvRow)
