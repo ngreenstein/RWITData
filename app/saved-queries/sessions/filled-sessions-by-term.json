@@ -1,0 +1,10 @@
+{
+	"name": "Filled Sessions by Term",
+	"description": "Reports total number of sessions, broken down by day of week and time of day, filtered to the specified term(s).",
+	"query": "SELECT weekDay AS 'Day of Week', timeSlot AS 'Time Slot', COUNT(*) AS '# Sessions' FROM centerSessions WHERE term IN (?) AND weekDay IN ('Sun', 'Mon', 'Tue', 'Wed', 'Thu') AND (timeSlot >= 12 AND timeSlot <= 21) AND (state = 'stopped' OR state = 'completed') AND timeSlot IS NOT NULL AND weekDay IS NOT NULL GROUP BY weekDay, timeSlot HAVING COUNT(*) >= 2 ORDER BY CASE weekDay WHEN 'Sun' THEN 0 WHEN 'Mon' THEN 1 WHEN 'Tue' THEN 2 WHEN 'Wed' THEN 3 WHEN 'Thu' THEN 4 END;",
+	"parameters": [{
+						"name": "Term",
+						"type": "text",
+						"required": true
+					}]
+}
