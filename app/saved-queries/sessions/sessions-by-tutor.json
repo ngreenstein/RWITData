@@ -1,7 +1,7 @@
 {
 	"name": "Center Sessions by Tutor",
 	"description": "Finds all center sessions associated with a given tutor, as identified by name.",
-	"query": "SELECT * FROM centerSessions INNER JOIN tutorStubs ON tutorStubs.id = centerSessions.tutorId WHERE tutorStubs.name = ?;",
+	"query": "SELECT *  FROM centerSessions INNER JOIN people ON people.netId = centerSessions.tutorId WHERE people.name = ?;",
 	"parameters": [{
 						"name": "Tutor Name",
 						"type": "text",
