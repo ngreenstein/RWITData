@@ -1,5 +1,11 @@
 # RWITData
 
+## About
+
+RWITData helps tutors explore data from [RWIT](https://students.dartmouth.edu/rwit/), Dartmouth's student writing center. It aims to facilitate institutional research and administrative tasks by laying an accessible interface over the complex records produced by RWIT's LMS.
+
+![screenshot](screenshot.png "Screenshot of RWITData")
+
 ## Installation
 
 1. Install Python 2.7 for your platform following the [directions on python.org](https://www.python.org/downloads/).
