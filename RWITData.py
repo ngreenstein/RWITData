@@ -14,6 +14,7 @@ enoDb = None
 from app.lib.bottle import Bottle, run, template, static_file, request, redirect
 from shutil import copyfile
 from datetime import datetime
+from dateutil.parser import parse as parsedate
 import os, tempfile, sys, csv
 
 FROZEN = getattr(sys, "frozen", False)
@@ -477,7 +478,7 @@ class SessionsDatabaseManager(DatabaseManager):
 		def addWeekDayInDict(dict, timeKey = "startTime", dayKey = "weekDay"):
 			if not dict.get(timeKey): return False
 			try:
-				timeStamp = datetime.strptime(dict[timeKey], "%m/%d/%Y %H:%M")
+				timeStamp = parsedate(dict[timeKey])
 			except ValueError:
 				return False # Couldn't parse time
 			dayInt = timeStamp.weekday()
@@ -491,10 +492,9 @@ class SessionsDatabaseManager(DatabaseManager):
 			#			If a session begins after the 50-min mark of an hour, slot as whatever hour it exists in most
 			# 			Otherwise, use hour of start time
 			if not (dict.get(startKey) and dict.get(stopKey)): return False
-			timeFormat = "%m/%d/%Y %H:%M"
 			try:
-				startTime = datetime.strptime(dict[startKey], timeFormat)
-				stopTime = datetime.strptime(dict[stopKey], timeFormat)
+				startTime = parsedate(dict[startKey])
+				stopTime = parsedate(dict[stopKey])
 			except ValueError:
 				return False # Couldn't parse times
 			duration = stopTime - startTime
